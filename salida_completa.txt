@@ -1,0 +1,2151 @@
+
+--- Listando archivos y directorios desde: /home/jmro/askvanilla ---
+
+Nota: Se aplica un límite de profundidad de 7 y se excluyen directorios/extensiones comunes (ver configuración).
+Para archivos JS (.js, .jsx, .mjs, .cjs), se intenta mostrar hasta 10MB de contenido.
+Para otros archivos de texto, se muestra un máximo de 2KB.
+📁 .git/ (Excluido por configuración)
+📄 index.js (270 bytes)
+   --- INICIO CONTENIDO ---
+// To run this code you need to install the following dependencies:
+// npm install @google/genai mime
+// npm install -D @types/node
+
+// El código fuente ha sido modularizado en la carpeta src/.
+// Ejecuta el entry point desde src/index.js
+// Ejemplo: node src/index.js
+
+   --- FIN CONTENIDO ---
+📄 list_files.js (8666 bytes)
+   --- INICIO CONTENIDO ---
+// Para ejecutar este script:
+// 1. Guarda el contenido en un archivo, por ejemplo, `list_files.js`.
+// 2. Abre tu terminal, navega hasta el directorio donde guardaste el archivo.
+// 3. Ejecuta: `node list_files.js`
+
+import { promises as fs } from 'fs'
+import path from 'path'
+
+// --- CONFIGURACIÓN DE RENDIMIENTO Y EXCLUSIÓN ---
+// Ajusta estas configuraciones según tus necesidades.
+
+// Define la cantidad máxima de bytes a leer de un archivo para intentar determinar si es binario.
+// Si un archivo es más grande que esto, no se intentará leerlo para la detección binaria.
+const MAX_FILE_READ_FOR_BINARY_CHECK_BYTES = 1 * 1024 * 1024 // 1 MB
+
+// Define la cantidad máxima de bytes del contenido de un archivo a mostrar en la consola
+// para ARCHIVOS DE TEXTO NO JAVASCRIPT.
+const DEFAULT_MAX_FILE_CONTENT_DISPLAY_BYTES = 2 * 1024 // 2 KB
+
+// Define la cantidad máxima de bytes del contenido de un archivo JavaScript a mostrar en la consola.
+// Se ha aumentado significativamente para mostrar el contenido completo de la mayoría de los archivos JS.
+const JS_MAX_CONTENT_DISPLAY_BYTES = 10 * 1024 * 1024 // 10 MB
+
+// Límite de profundidad de recursión para evitar recorrer estructuras de directorios excesivamente profundas.
+const MAX_RECURSION_DEPTH = 7
+
+// Lista de directorios a excluir del recorrido.
+// Es CRÍTICO excluir 'node_modules' y '.git' para evitar el bloqueo del sistema
+// debido a la gran cantidad de archivos y profundidad.
+const EXCLUDE_DIRS = [
+  'node_modules', // Dependencias de Node.js (cientos/miles de archivos)
+  '.git', // Historial de control de versiones (puede ser grande)
+  '.vscode', // Configuración de VS Code
+  'dist', // Salidas de build
+  'build', // Salidas de build
+  'temp', // Temporales
+  'tmp', // Temporales
+  'coverage', // Informes de cobertura de tests
+  '__pycache__', // Para proyectos Python
+  '.idea', // Para proyectos IntelliJ/WebStorm
+  'test', // Directorios de pruebas (pueden ser grandes si tienen muchos fixtures)
+  'docs', // Documentación (a veces contiene muchos archivos)
+]
+
+// Lista de extensiones de archivo a excluir.
+// Estos son típicamente archivos binarios o muy grandes cuyo contenido no es útil en consola.
+// Asegúrate de que .js, .jsx, .mjs, .cjs NO estén en esta lista.
+const EXCLUDE_FILE_EXTENSIONS = [
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.bmp',
+  '.ico',
+  '.svg',
+  '.webp', // Imágenes
+  '.mp3',
+  '.wav',
+  '.ogg',
+  '.flac',
+  '.aac', // Audio
+  '.mp4',
+  '.avi',
+  '.mov',
+  '.webm', // Video
+  '.zip',
+  '.tar',
+  '.gz',
+  '.rar',
+  '.7z', // Archivos comprimidos
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.ppt',
+  '.pptx', // Documentos de oficina
+  '.exe',
+  '.dll',
+  '.bin',
+  '.so',
+  '.dylib', // Ejecutables/Librerías
+  '.DS_Store', // Archivos de macOS
+  '.log', // Archivos de log (pueden ser muy grandes)
+  '.map', // Archivos de mapa de código (grandes)
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.otf',
+  '.eot', // Fuentes
+  '.sqlite',
+  '.db',
+  '.dat', // Bases de datos y archivos de datos genéricos
+  '.lock', // Archivos de lock (ej. package-lock.json, pnpm-lock.yaml)
+  '.json', // Puedes excluir si tus JSONs son muy grandes o solo quieres código. Por ahora, no lo excluyo.
+  '.yaml',
+  '.yml', // Puedes excluir si tus YAMLs son muy grandes. Por ahora, no lo excluyo.
+]
+
+// --- FUNCIONES PRINCIPALES ---
+
+/**
+ * Función recursiva para listar el contenido de un directorio.
+ * @param {string} currentPath La ruta del directorio actual a escanear.
+ * @param {string} indent La cadena de indentación para la salida de la consola.
+ * @param {number} currentDepth La profundidad de recursión actual.
+ */
+async function listDirectoryContents(
+  currentPath,
+  indent = '',
+  currentDepth = 0
+) {
+  // 1. Comprobar límite de profundidad
+  if (currentDepth >= MAX_RECURSION_DEPTH) {
+    console.log(
+      `${indent}📁 ... (Profundidad máxima alcanzada en ${path.basename(
+        currentPath
+      )}. Saltando contenido.)`
+    )
+    return
+  }
+
+  try {
+    const entries = await fs.readdir(currentPath, { withFileTypes: true })
+
+    for (const dirent of entries) {
+      const fullPath = path.join(currentPath, dirent.name)
+
+      if (dirent.isDirectory()) {
+        // Si es un directorio
+        if (EXCLUDE_DIRS.includes(dirent.name)) {
+          console.log(
+            `${indent}📁 ${dirent.name}/ (Excluido por configuración)`
+          )
+          continue // Saltar este directorio
+        }
+        console.log(`${indent}📁 ${dirent.name}/`)
+        // Llamada recursiva para los subdirectorios
+        await listDirectoryContents(fullPath, indent + '  ', currentDepth + 1)
+      } else if (dirent.isFile()) {
+        // Si es un archivo
+        const fileExtension = path.extname(dirent.name).toLowerCase()
+        if (EXCLUDE_FILE_EXTENSIONS.includes(fileExtension)) {
+          console.log(
+            `${indent}📄 ${dirent.name} (Excluido por configuración - tipo: ${fileExtension})`
+          )
+          continue // Saltar este archivo
+        }
+
+        let contentPreview = ''
+        let fileSize = 0
+        let currentMaxDisplayBytes = DEFAULT_MAX_FILE_CONTENT_DISPLAY_BYTES
+
+        // Determinar el límite de visualización basado en la extensión
+        if (['.js', '.jsx', '.mjs', '.cjs'].includes(fileExtension)) {
+          currentMaxDisplayBytes = JS_MAX_CONTENT_DISPLAY_BYTES
+        }
+
+        try {
+          const stats = await fs.stat(fullPath)
+          fileSize = stats.size
+
+          // Si el archivo es demasiado grande para la lectura binaria o para mostrar la vista previa
+          if (
+            fileSize > MAX_FILE_READ_FOR_BINARY_CHECK_BYTES &&
+            fileExtension !== '.js'
+          ) {
+            // Excepción para JS
+            // Para JS, si es enorme, aún así intentaremos leer una parte considerable.
+            // Para otros archivos, si son muy grandes, no los leemos.
+            contentPreview = `<Contenido demasiado grande para leer (${fileSize} bytes). No se leyó completo.>`
+          } else {
+            const buffer = await fs.readFile(fullPath)
+            // Heurística para detectar si es binario:
+            const hasNullBytes = buffer.includes(0) // Comprueba si el buffer contiene el byte nulo (0x00)
+
+            if (hasNullBytes) {
+              contentPreview = `<Contenido binario detectado (${fileSize} bytes). No se puede mostrar como texto legible.>`
+            } else {
+              // Intentar decodificar como UTF-8
+              try {
+                const textContent = buffer.toString('utf8')
+                // Aplica el límite de visualización específico para la extensión
+                contentPreview = textContent.substring(
+                  0,
+                  currentMaxDisplayBytes
+                )
+                if (textContent.length > currentMaxDisplayBytes) {
+                  contentPreview += '...<truncado>'
+                }
+              } catch (decodeErr) {
+                // Si falla la decodificación UTF-8, es definitivamente un encoding no soportado o binario.
+                contentPreview = `<Contenido no-UTF8 o binario (${fileSize} bytes). Error de decodificación.>`
+              }
+            }
+          }
+        } catch (readErr) {
+          contentPreview = `<Error al leer archivo: ${readErr.message}>`
+        }
+
+        console.log(`${indent}📄 ${dirent.name} (${fileSize} bytes)`)
+        console.log(`${indent}   --- INICIO CONTENIDO ---`)
+        console.log(contentPreview)
+        console.log(`${indent}   --- FIN CONTENIDO ---`)
+      }
+      // Ignorar otros tipos de entradas como symlinks, sockets, FIFOs, etc.
+    }
+  } catch (error) {
+    // Capturar errores como permisos denegados o directorios que no existen.
+    console.error(
+      `${indent}Error al acceder a ${currentPath}: ${error.message}`
+    )
+  }
+}
+
+// --- FUNCIÓN PRINCIPAL DE EJECUCIÓN ---
+async function main() {
+  const startPath = process.cwd() // Obtiene el directorio actual de ejecución
+  console.log(`\n--- Listando archivos y directorios desde: ${startPath} ---\n`)
+  console.log(
+    `Nota: Se aplica un límite de profundidad de ${MAX_RECURSION_DEPTH} y se excluyen directorios/extensiones comunes (ver configuración).`
+  )
+  console.log(
+    `Para archivos JS (.js, .jsx, .mjs, .cjs), se intenta mostrar hasta ${
+      JS_MAX_CONTENT_DISPLAY_BYTES / (1024 * 1024)
+    }MB de contenido.`
+  )
+  console.log(
+    `Para otros archivos de texto, se muestra un máximo de ${
+      DEFAULT_MAX_FILE_CONTENT_DISPLAY_BYTES / 1024
+    }KB.`
+  )
+  await listDirectoryContents(startPath)
+  console.log('\n--- Script Finalizado ---')
+}
+
+// Inicia la ejecución del script
+main()
+
+   --- FIN CONTENIDO ---
+📁 node_modules/ (Excluido por configuración)
+📄 package.json (Excluido por configuración - tipo: .json)
+📄 pnpm-lock.yaml (Excluido por configuración - tipo: .yaml)
+📄 salida_completa.txt (9650 bytes)
+   --- INICIO CONTENIDO ---
+
+--- Listando archivos y directorios desde: /home/jmro/askvanilla ---
+
+Nota: Se aplica un límite de profundidad de 7 y se excluyen directorios/extensiones comunes (ver configuración).
+Para archivos JS (.js, .jsx, .mjs, .cjs), se intenta mostrar hasta 10MB de contenido.
+Para otros archivos de texto, se muestra un máximo de 2KB.
+📁 .git/ (Excluido por configuración)
+📄 index.js (270 bytes)
+   --- INICIO CONTENIDO ---
+// To run this code you need to install the following dependencies:
+// npm install @google/genai mime
+// npm install -D @types/node
+
+// El código fuente ha sido modularizado en la carpeta src/.
+// Ejecuta el entry point desde src/index.js
+// Ejemplo: node src/index.js
+
+   --- FIN CONTENIDO ---
+📄 list_files.js (8666 bytes)
+   --- INICIO CONTENIDO ---
+// Para ejecutar este script:
+// 1. Guarda el contenido en un archivo, por ejemplo, `list_files.js`.
+// 2. Abre tu terminal, navega hasta el directorio donde guardaste el archivo.
+// 3. Ejecuta: `node list_files.js`
+
+import { promises as fs } from 'fs'
+import path from 'path'
+
+// --- CONFIGURACIÓN DE RENDIMIENTO Y EXCLUSIÓN ---
+// Ajusta estas configuraciones según tus necesidades.
+
+// Define la cantidad máxima de bytes a leer de un archivo para intentar determinar si es binario.
+// Si un archivo es más grande que esto, no se intentará leerlo para la detección binaria.
+const MAX_FILE_READ_FOR_BINARY_CHECK_BYTES = 1 * 1024 * 1024 // 1 MB
+
+// Define la cantidad máxima de bytes del contenido de un archivo a mostrar en la consola
+// para ARCHIVOS DE TEXTO NO JAVASCRIPT.
+const DEFAULT_MAX_FILE_CONTENT_DISPLAY_BYTES = 2 * 1024 // 2 KB
+
+// Define la cantidad máxima de bytes del contenido de un archivo JavaScript a mostrar en la consola.
+// Se ha aumentado significativamente para mostrar el contenido completo de la mayoría de los archivos JS.
+const JS_MAX_CONTENT_DISPLAY_BYTES = 10 * 1024 * 1024 // 10 MB
+
+// Límite de profundidad de recursión para evitar recorrer estructuras de directorios excesivamente profundas.
+const MAX_RECURSION_DEPTH = 7
+
+// Lista de directo...<truncado>
+   --- FIN CONTENIDO ---
+📁 src/
+  📁 client/
+    📄 genaiClient.js (157 bytes)
+       --- INICIO CONTENIDO ---
+// src/client/genaiClient.js
+import { GoogleGenAI } from '@google/genai'
+
+export function createGenAIClient(apiKey) {
+  return new GoogleGenAI({ apiKey })
+}
+
+       --- FIN CONTENIDO ---
+  📁 config/
+    📄 genaiConfig.js (180 bytes)
+       --- INICIO CONTENIDO ---
+// src/config/genaiConfig.js
+
+export const config = {
+  thinkingConfig: {
+    thinkingBudget: -1,
+  },
+  responseMimeType: 'text/plain',
+}
+
+export const model = 'gemini-2.5-flash'
+
+       --- FIN CONTENIDO ---
+  📄 index.js (3216 bytes)
+     --- INICIO CONTENIDO ---
+// src/index.js
+import { createGenAIClient } from './client/genaiClient.js'
+import { generateContent } from './services/generateContent.js'
+import inquirer from 'inquirer'
+import { interactiveMode } from './modes/interactive.js'
+import { chatModeWithMemory } from './modes/chatWithMemory.js'
+import { chatModeNoMemory } from './modes/chatNoMemory.js'
+import { parseArgs } from './utils/parseArgs.js'
+import { chatModeWithMemoryFile } from './modes/chatWithMemoryFile.js'
+import { chatModeNoMemoryFile } from './modes/chatNoMemoryFile.js'
+import { generateTTS } from './services/generateTTS.js'
+import { pureTTSMode } from './modes/pureTTS.js'
+// --- NUEVA IMPORTACIÓN ---
+import { contextHistoryManager } from './modes/contextHistoryManager.js' // <--- Añadir esta línea
+
+// Necesario si algún modo usa inquirer.EditorPrompt y no se registra automáticamente
+import EditorPrompt from 'inquirer/lib/prompts/editor.js'
+inquirer.registerPrompt('editor', EditorPrompt)
+
+const ai = createGenAIClient(process.env.GEMINI_API_KEY)
+
+async function main() {
+  // ... (tu lógica existente para `parseArgs` y `fileContent`) ...
+  let parsed
+  try {
+    parsed = await parseArgs(process.argv)
+  } catch (e) {
+    console.error(e.message)
+    process.exit(1)
+  }
+  const { prompt, fileContent } = parsed
+  if (fileContent) {
+    const contents = [
+      {
+        role: 'user',
+        parts: [{ text: prompt || '(sin prompt)' }, { text: fileContent }],
+      },
+    ]
+    for await (const text of generateContent(ai, contents)) {
+      process.stdout.write(text)
+    }
+    process.stdout.write('\n')
+    return
+  }
+
+  // Menú interactivo con inquirer
+  const { mode } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'mode',
+      message: 'Selecciona modo:',
+      choices: [
+        { name: '1) Interactivo', value: '1' },
+        { name: '2) Chat con memoria', value: '2' },
+        { name: '3) Chat sin memoria', value: '3' },
+        { name: '4) Chat con memoria prompt+archivo', value: '4' },
+        { name: '5) Chat sin memoria prompt+archivo', value: '5' },
+        { name: '6) TTS Directo (Texto a Voz)', value: 'pureTTS' },
+        {
+          name: '7) Gestionar Contexto e Historial',
+          value: 'manageContextHistory',
+        }, // <--- ¡NUEVA OPCIÓN!
+        { name: 'Salir', value: 'exit' }, // Opción para salir limpiamente
+      ],
+    },
+  ])
+
+  // Lógica para ejecutar el modo seleccionado
+  if (mode === '2') {
+    await chatModeWithMemory(ai, generateContent)
+  } else if (mode === '3') {
+    await chatModeNoMemory(ai, generateContent)
+  } else if (mode === '4') {
+    await chatModeWithMemoryFile(ai, generateContent, generateTTS)
+  } else if (mode === '5') {
+    await chatModeNoMemoryFile(ai, generateContent)
+  } else if (mode === 'pureTTS') {
+    await pureTTSMode()
+  } else if (mode === 'manageContextHistory') {
+    // <--- ¡NUEVO ELSE IF!
+    await contextHistoryManager()
+  } else if (mode === '1') {
+    await interactiveMode(ai, generateContent)
+  } else if (mode === 'exit') {
+    // Manejar la opción de salida
+    console.log('Saliendo de la aplicación. ¡Hasta pronto!')
+    process.exit(0)
+  } else {
+    console.log('Modo no reconocido.')
+  }
+}
+
+main()
+
+     --- FIN CONTENIDO ---
+  📁 modes/
+    📄 chatNoMemory.js (488 bytes)
+       --- INICIO CONTENIDO ---
+import readline from 'readline'
+import {
+  getUserPrompt,
+  buildContents,
+  printModelResponse,
+} from '../utils/chatHelpers.js'
+import { chatAsk } from '../utils/chatAsk.js'
+
+export async function chatModeNoMemory(ai, generateContent) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  })
+  await chatAsk({
+    getPrompt: () => getUserPrompt(rl),
+    buildContents,
+    printModelResponse,
+    generateContent,
+    ai,
+  })
+  rl.close()
+}
+
+       --- FIN CONTENIDO ---
+    📄 chatNoMemoryFile.js (639 bytes)
+       --- INICIO CONTENIDO ---
+import inquirer from 'inquirer'
+import FileTreeSelectionPrompt from 'inquirer-file-tree-selection-prompt'
+import {
+  getInquirerPrompt,
+  getFilePath,
+  getFileContent,
+  buildContents,
+  printModelResponse,
+} from '../utils/chatHelpers.js'
+import { chatAsk } from '../utils/chatAsk.js'
+inquirer.registerPrompt('file-tree-selection', FileTreeSelectionPrompt)
+
+export async function chatModeNoMemoryFile(ai, generateContent) {
+  await chatAsk({
+    getPrompt: () => getInquirerPrompt(inquirer),
+    getFilePath: () => getFilePath(inquirer),
+    getFileContent,
+    buildContents,
+    printModelResponse,
+    generateContent,
+    ai,
+  })
+}
+
+       --- FIN CONTENIDO ---
+    📄 chatWithMemory.js (841 bytes)
+       --- INICIO CONTENIDO ---
+import readline from 'readline'
+import path from 'path'
+import {
+  getUserPrompt,
+  buildContents,
+  printModelResponse,
+} from '../utils/chatHelpers.js'
+import { chatAsk } from '../utils/chatAsk.js'
+import {
+  getHistoryFilePath,
+  loadHistory,
+  saveHistory,
+} from '../utils/chatHistory.js'
+
+export async function chatModeWithMemory(ai, generateContent) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  })
+  const historyFile = getHistoryFilePath('chat_history.json')
+  let history = await loadHistory(historyFile)
+  await chatAsk({
+    getPrompt: () => getUserPrompt(rl),
+    buildContents,
+    printModelResponse,
+    generateContent,
+    ai,
+    history,
+    saveHistory: (h) => saveHistory(historyFile, h),
+    exitMessage: `Historial guardado en: ${historyFile}`,
+  })
+  rl.close()
+}
+
+       --- FIN CONTENIDO ---
+    📄 chatWithMemoryFile.js (5151 bytes)
+       --- INICIO CONTENIDO ---
+// src/modes/chatWithMemoryFile.js
+import inquirer from 'inquirer'
+import FileTreeSelectionPrompt from 'inquirer-file-tree-selection-prompt'
+import {
+  getInquirerPrompt,
+  getFilePath,
+  getFileContent,
+  // Importa la función original buildContents con un alias,
+  // para poder llamarla internamente si es necesario,
+  // pero sin que colisione con el nombre del parámetro del override.
+  buildContents as originalBuildContents,
+  printModelResponse,
+} from '../utils/chatHelpers.js'
+import { chatAsk } from '../utils/chatAsk.js'
+import {
+  getHistoryFilePath,
+  loadHistory,
+  saveHistory,
+} from '../utils/chatHistory.js'
+import { chooseOutputMode } from '../utils/chooseOutputMode.js'
+import { generateTTS } from '../services/generateTTS.js'
+import { saveAudioFile } from '../utils/saveAudioFile.js'
+import { handleTTS } from '../utils/ttsHelpers.js'
+import { ContextHistoryManager } from './contextHistoryManager.js'
+
+inquirer.registerPrompt('file-tree-selection', FileTreeSelectionPrompt)
+
+export async function chatModeWithMemoryFile(ai, generateContent) {
+  const historyFile = getHistoryFilePath('chat_memory_file_history.json')
+  let history = await loadHistory(historyFile)
+
+  // Inicializa el gestor de contexto con el historial cargado.
+  // CRÍTICO: contextManager.history debe ser la MISMA instancia de array
+  // que chatAsk va a modificar, para que el manager siempre vea el estado actual.
+  const contextManager = new ContextHistoryManager(history)
+
+  await chatAsk({
+    getPrompt: () => getInquirerPrompt(inquirer),
+    getFilePath: () => getFilePath(inquirer),
+    getFileContent,
+    // *** ESTE ES EL OVERRIDE CRÍTICO DE buildContents ***
+    // Su firma DEBE COINCIDIR con lo que chatAsk le pasa:
+    // (userPrompt, chatAskHistory, fileContent, combinedContext)
+    buildContents: (
+      userPrompt,
+      chatAskHistory,
+      fileContent,
+      combinedContext
+    ) => {
+      // 1. Prepara las "partes" para el *turno actual del usuario* (prompt + archivo).
+      //    No incluimos el historial o el contexto combinado aquí,
+      //    ya que contextManager.manageContext será quien los integre.
+      const currentUserTurnParts = []
+      if (userPrompt) {
+        currentUserTurnParts.push({ text: userPrompt })
+      }
+      // Asegúrate de que fileContent es una cadena antes de añadirla.
+      // Si el archivo adjunto no tiene contenido, será una cadena vacía.
+      if (fileContent) {
+        currentUserTurnParts.push({ text: fileContent })
+      }
+
+      // 2. Llama al método manageContext del gestor de contexto.
+      //    Este método es responsable de combinar las partes del turno actual del usuario,
+      //    el contexto global/local (combinedContext) y el historial completo (chatAskHistory)
+      //    para producir el array final de 'contents' que se enviará al modelo.
+      //    Necesitarás asegurarte de que ContextHistoryManager.manageContext
+      //    esté diseñado para recibir estos tres argumentos en este orden
+      //    y que construya el array 'contents' correctamente.
+      const finalContents = contextManager.manageContext(
+        currentUserTurnParts,
+        combinedContext, // Cadena con contexto global/local
+        chatAskHistory // Array con el historial completo (actualizado por chatAsk)
+      )
+
+      // 3. Validación: Asegura que contextManager.manageContext ha devuelto un array.
+      //    Esta validación es crucial y si el error "contents is not iterable" ocurre
+      //    y esta línea NO imprime el error, significa que el problema está
+      //    más allá de esta función, pero es poco probable con esta corrección.
+      if (!Array.isArray(finalContents)) {
+        console.error('----------------------------------------------------')
+        console.error(
+          'ERROR CRÍTICO: contextManager.manageContext no devolvió un array.'
+        )
+        console.error('Tipo de dato devuelto:', typeof finalContents)
+        console.error('Valor devuelto:', finalContents)
+        console.error(
+          'Revisa la implementación de ContextHistoryManager.manageContext en src/modes/contextHistoryManager.js.'
+        )
+        console.error('----------------------------------------------------')
+        throw new Error(
+          'El gestor de contexto devolvió un valor no iterable para "contents".'
+        )
+      }
+
+      return finalContents
+    },
+    printModelResponse,
+    generateContent,
+    generateTTS,
+    saveAudioFile,
+    handleTTS,
+    ai,
+    // CRÍTICO: Pasamos la referencia al historial interno del ContextHistoryManager.
+    // Cuando chatAsk añada mensajes a 'history', los estará añadiendo directamente
+    // al array que ContextHistoryManager está gestionando.
+    history: contextManager.history,
+    saveHistory: (h) => saveHistory(historyFile, h), // La función saveHistory guardará la instancia de array que gestiona contextManager.
+    exitMessage: `Historial y contexto guardados en: ${historyFile}`,
+    outputMode: await chooseOutputMode(),
+    contextManager, // Pasamos el gestor de contexto por si chatAsk necesita interactuar con él (ej. para post-procesamiento)
+  })
+}
+
+       --- FIN CONTENIDO ---
+    📄 contextHistoryManager.js (6098 bytes)
+       --- INICIO CONTENIDO ---
+// src/modes/contextHistoryManager.js
+import inquirer from 'inquirer'
+import EditorPrompt from 'inquirer/lib/prompts/editor.js' // Usar el prompt de editor para edición de texto largo
+import { promises as fs } from 'fs' // Para comprobar si el archivo existe para el editor
+import path from 'path'
+
+// Importar las funciones de gestión de contexto Y LA CONSTANTE DE RUTA
+import {
+  getGeneralContext,
+  saveGeneralContext,
+  deleteGeneralContext,
+  getLocalContext,
+  saveLocalContext,
+  deleteLocalContext,
+  GENERAL_CONTEXT_FILE_PATH, // <--- ¡IMPORTACIÓN CLAVE AQUÍ!
+  getLocalContextFilePath, // Esta función ya existía y devuelve la ruta local completa
+} from '../utils/contextManager.js'
+
+// Importar las funciones de gestión de historial
+import {
+  getHistoryFilePath,
+  loadHistory,
+  clearHistory,
+} from '../utils/chatHistory.js'
+import {
+  loadAudioHistory, // El audioHistory.js tiene su propio HISTORY_FILE interno
+  clearAudioHistory,
+} from '../utils/audioHistory.js'
+
+// Registrar el prompt de editor si no está ya registrado globalmente
+inquirer.registerPrompt('editor', EditorPrompt)
+
+async function handleContextHistoryAction(
+  type,
+  filePath,
+  loadFn,
+  saveFn,
+  deleteFn
+) {
+  while (true) {
+    const { action } = await inquirer.prompt({
+      type: 'list',
+      name: 'action',
+      message: `Acción para ${type} (${path.basename(filePath) || filePath}):`,
+      choices: [
+        '1) Leer',
+        '2) Editar',
+        '3) Eliminar',
+        '4) Volver al menú anterior',
+      ],
+    })
+
+    if (action === '4') break // Volver al menú anterior
+
+    let currentContent = ''
+    if (loadFn) {
+      currentContent = await loadFn(filePath) // Para contexto y chatHistory
+    } else {
+      // Manejar casos donde loadFn es null, como loadAudioHistory
+      if (type === 'Historial de Audio Local') {
+        const history = await loadAudioHistory() // loadAudioHistory no toma filePath
+        currentContent = JSON.stringify(history, null, 2)
+      }
+    }
+
+    switch (action) {
+      case '1': // Leer
+        console.log(`\n--- Contenido de ${type} (${filePath}) ---`)
+        console.log(currentContent.trim() === '' ? '<Vacío>' : currentContent)
+        console.log(`--- Fin Contenido de ${type} ---\n`)
+        break
+      case '2': // Editar
+        try {
+          if (!saveFn) {
+            // Si no hay función de guardado directa para este tipo
+            console.log(
+              'La edición directa no está soportada para este tipo de historial.'
+            )
+            break
+          }
+          const { newContent } = await inquirer.prompt({
+            type: 'editor',
+            name: 'newContent',
+            message: `Edita el ${type}. Guarda y cierra el editor para confirmar.`,
+            default: currentContent,
+          })
+          await saveFn(filePath, newContent) // Para contexto (texto plano)
+          console.log(`${type} actualizado.`)
+        } catch (e) {
+          console.error(`Error al editar ${type}:`, e.message)
+        }
+        break
+      case '3': // Eliminar
+        const { confirmDelete } = await inquirer.prompt({
+          type: 'confirm',
+          name: 'confirmDelete',
+          message: `¿Estás seguro de que quieres eliminar ${type} (${filePath})? Esto es irreversible.`,
+          default: false,
+        })
+        if (confirmDelete) {
+          if (deleteFn) {
+            await deleteFn(filePath) // deleteContext o clearHistory/clearAudioHistory
+            console.log(`${type} eliminado.`)
+            return // Salir después de eliminar para que el usuario no intente editar algo borrado
+          }
+        } else {
+          console.log('Eliminación cancelada.')
+        }
+        break
+    }
+    console.log('\n') // Separador
+  }
+}
+
+export async function contextHistoryManager() {
+  while (true) {
+    const { type } = await inquirer.prompt({
+      type: 'list',
+      name: 'type',
+      message: 'Gestionar:',
+      choices: [
+        { name: '1) Contexto General', value: 'generalContext' },
+        { name: '2) Contexto Local (proyecto actual)', value: 'localContext' },
+        { name: '3) Historial de Chat Local', value: 'chatHistory' },
+        { name: '4) Historial de Audio Local', value: 'audioHistory' },
+        { name: '5) Volver al menú principal', value: 'back' },
+      ],
+    })
+
+    if (type === 'back') break
+
+    let filePath
+    let loadFn
+    let saveFn
+    let deleteFn
+    let displayName
+
+    switch (type) {
+      case 'generalContext':
+        filePath = GENERAL_CONTEXT_FILE_PATH // <--- ¡USANDO LA CONSTANTE IMPORTADA!
+        loadFn = getGeneralContext
+        saveFn = saveGeneralContext
+        deleteFn = deleteGeneralContext
+        displayName = 'Contexto General'
+        break
+      case 'localContext':
+        filePath = getLocalContextFilePath()
+        loadFn = getLocalContext
+        saveFn = saveLocalContext
+        deleteFn = deleteLocalContext
+        displayName = 'Contexto Local'
+        break
+      case 'chatHistory':
+        filePath = getHistoryFilePath('chat_history.json')
+        loadFn = loadHistory
+        saveFn = null // No ofrecer edición directa de historial como string (es un JSON de objetos)
+        deleteFn = clearHistory
+        displayName = 'Historial de Chat Local'
+        break
+      case 'audioHistory':
+        // El historial de audio tiene su propio HISTORY_FILE interno, no se le pasa filePath directamente a load/clear
+        filePath = path.join(process.cwd(), 'audio_history.json') // Mostrar ruta para info al usuario
+        loadFn = null // Se manejará la carga de forma especial (en handleContextHistoryAction)
+        saveFn = null // No ofrecer edición directa
+        deleteFn = clearAudioHistory
+        displayName = 'Historial de Audio Local'
+        break
+    }
+
+    // Asegurarse de que el usuario vea la ruta del archivo real
+    const displayPath = filePath || 'N/A'
+
+    await handleContextHistoryAction(
+      displayName,
+      displayPath,
+      loadFn,
+      saveFn,
+      deleteFn
+    )
+  }
+  console.log('Saliendo del gestor de contexto e historial.')
+}
+
+       --- FIN CONTENIDO ---
+    📄 interactive.js (473 bytes)
+       --- INICIO CONTENIDO ---
+import readline from 'readline'
+
+export async function interactiveMode(ai, generateContent) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  })
+  rl.question('Escribe tu pregunta: ', async (prompt) => {
+    const contents = [{ role: 'user', parts: [{ text: prompt }] }]
+    for await (const text of generateContent(ai, contents)) {
+      process.stdout.write(text)
+    }
+    process.stdout.write('\n')
+    rl.close()
+  })
+}
+
+       --- FIN CONTENIDO ---
+    📄 pureTTS.js (9877 bytes)
+       --- INICIO CONTENIDO ---
+// src/modes/pureTTS.js
+import readline from 'readline'
+import inquirer from 'inquirer'
+import FileTreeSelectionPrompt from 'inquirer-file-tree-selection-prompt'
+import { generateTTS } from '../services/generateTTS.js'
+import { saveAudioFile } from '../utils/saveAudioFile.js'
+import { getFilePath, getFileContent } from '../utils/chatHelpers.js'
+import { splitTextForTTS } from '../utils/splitText.js'
+
+// Para la gestión de archivos y ejecución de comandos
+import { promises as fs } from 'fs'
+import path from 'path'
+import { exec } from 'child_process' // <--- CAMBIO: USAR child_process.exec
+
+inquirer.registerPrompt('file-tree-selection', FileTreeSelectionPrompt)
+
+// --- Nuevas utilidades para el progreso ---
+const PROGRESS_FILE_NAME = '.tts_progress.json'
+// Directorio base para archivos de progreso y temporales
+const currentDir = process.cwd()
+
+async function loadProgress() {
+  // Removido baseDir de aquí, usa currentDir global
+  const filePath = path.join(currentDir, PROGRESS_FILE_NAME)
+  try {
+    const data = await fs.readFile(filePath, 'utf-8')
+    return JSON.parse(data)
+  } catch (e) {
+    return {
+      textHash: '',
+      completedParts: [],
+      tempFiles: [],
+    }
+  }
+}
+
+async function saveProgress(progress) {
+  // Removido baseDir de aquí, usa currentDir global
+  const filePath = path.join(currentDir, PROGRESS_FILE_NAME)
+  await fs.writeFile(filePath, JSON.stringify(progress, null, 2), 'utf-8')
+}
+
+async function clearProgress() {
+  // Removido baseDir de aquí, usa currentDir global
+  const filePath = path.join(currentDir, PROGRESS_FILE_NAME)
+  try {
+    await fs.unlink(filePath)
+    console.log('Archivo de progreso limpiado.')
+  } catch (e) {
+    if (e.code !== 'ENOENT') {
+      console.error('Error al limpiar archivo de progreso:', e.message)
+    }
+  }
+}
+
+async function cleanupTempFiles(tempFiles) {
+  for (const filePath of tempFiles) {
+    try {
+      await fs.unlink(filePath)
+    } catch (e) {
+      console.warn(
+        `No se pudo eliminar archivo temporal ${filePath}: ${e.message}`
+      )
+    }
+  }
+}
+
+/**
+ * Función que ejecuta un comando de shell y devuelve una promesa.
+ * @param {string} command El comando a ejecutar.
+ * @returns {Promise<{stdout: string, stderr: string}>}
+ */
+function runCommand(command) {
+  return new Promise((resolve, reject) => {
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        reject(
+          new Error(
+            `Comando fallido: ${command}\nError: ${error.message}\nStderr: ${stderr}`
+          )
+        )
+        return
+      }
+      if (stderr) {
+        console.warn(`Advertencia en comando: ${command}\nStderr: ${stderr}`)
+      }
+      resolve({ stdout, stderr })
+    })
+  })
+}
+
+// --- Función principal del modo TTS ---
+export async function pureTTSMode() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  })
+
+  console.log('\n--- Modo Conversión Texto a Voz Directa ---')
+  const TTS_CHARACTER_LIMIT = 4500
+
+  while (true) {
+    const { inputMethod } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'inputMethod',
+        message: '¿Cómo quieres proporcionar el texto?',
+        choices: [
+          { name: '1) Escribir texto directamente', value: 'type' },
+          {
+            name: '2) Seleccionar un archivo (.txt, .md, .js, etc.)',
+            value: 'file',
+          },
+          { name: '3) Salir', value: 'exit' },
+        ],
+      },
+    ])
+
+    if (inputMethod === 'exit') {
+      break
+    }
+
+    let rawTextToConvert = ''
+    let isFileMode = false
+    let inputIdentifier = ''
+
+    if (inputMethod === 'type') {
+      rawTextToConvert = await new Promise((resolve) =>
+        rl.question('Escribe el texto para TTS (o "salir"): ', resolve)
+      )
+      if (rawTextToConvert.toLowerCase() === 'salir') {
+        break
+      }
+      if (!rawTextToConvert.trim()) {
+        console.log('Por favor, ingresa algún texto válido.')
+        continue
+      }
+      inputIdentifier =
+        'input_' +
+        Buffer.from(rawTextToConvert).toString('base64').substring(0, 8)
+    } else if (inputMethod === 'file') {
+      isFileMode = true
+      const filePath = await getFilePath(inquirer)
+      if (!filePath) {
+        console.log(
+          'No se seleccionó ningún archivo. Volviendo al menú de entrada.'
+        )
+        continue
+      }
+
+      try {
+        rawTextToConvert = await getFileContent(filePath)
+        if (!rawTextToConvert.trim()) {
+          console.log(
+            'El archivo seleccionado está vacío o solo contiene espacios en blanco.'
+          )
+          continue
+        }
+        inputIdentifier =
+          'file_' +
+          path.basename(filePath) +
+          '_' +
+          (await fs.stat(filePath)).mtimeMs
+        console.log(`Contenido del archivo "${filePath}" cargado para TTS.`)
+      } catch (e) {
+        console.error(`Error al leer el archivo ${filePath}: ${e.message}`)
+        continue
+      }
+    }
+
+    const textParts = splitTextForTTS(rawTextToConvert, TTS_CHARACTER_LIMIT)
+    if (textParts.length === 0) {
+      console.log('El texto no contiene contenido procesable.')
+      continue
+    }
+    if (textParts.length > 1) {
+      console.log(
+        `El texto se ha dividido en ${textParts.length} partes para una mejor generación de audio.`
+      )
+    }
+
+    const progress = await loadProgress() // Sin baseDir
+    const currentTextHash = inputIdentifier
+
+    if (progress.textHash !== currentTextHash) {
+      console.log(
+        'Texto nuevo o modificado detectado. Iniciando nueva sesión TTS.'
+      )
+      await cleanupTempFiles(progress.tempFiles)
+      progress.textHash = currentTextHash
+      progress.completedParts = []
+      progress.tempFiles = []
+      await saveProgress(progress) // Sin baseDir
+    } else {
+      console.log(
+        `Reanudando desde la parte ${progress.completedParts.length + 1}.`
+      )
+    }
+
+    let finalOutputExtension = 'wav'
+
+    for (let i = 0; i < textParts.length; i++) {
+      if (progress.completedParts.includes(i)) {
+        console.log(
+          `Parte ${i + 1}/${textParts.length} ya completada. Saltando.`
+        )
+        continue
+      }
+
+      const part = textParts[i]
+      console.log(
+        `Generando audio para la parte ${i + 1}/${textParts.length} (${
+          part.length
+        } caracteres)...`
+      )
+
+      const tempAudioFileName = path.join(currentDir, `.temp_tts_part_${i}.wav`)
+
+      try {
+        const { buffer, extension } = await generateTTS(part)
+        await saveAudioFile(tempAudioFileName, buffer)
+        console.log(
+          `Parte ${i + 1} guardada temporalmente: ${tempAudioFileName}`
+        )
+
+        progress.completedParts.push(i)
+        progress.tempFiles.push(tempAudioFileName)
+        await saveProgress(progress) // Sin baseDir
+
+        finalOutputExtension = extension
+      } catch (error) {
+        console.error(
+          `Error al generar audio para la parte ${i + 1}:`,
+          error.message
+        )
+        break
+      }
+    }
+
+    // --- Concatenación final de los archivos de audio temporales con FFmpeg ---
+    if (
+      progress.completedParts.length === textParts.length &&
+      textParts.length > 0
+    ) {
+      const finalOutputFileName = `pure_tts_output_combined_${Date.now()}.${finalOutputExtension}`
+      const inputFilesList = progress.tempFiles
+
+      if (inputFilesList.length === 0) {
+        console.log('No hay partes de audio para concatenar.')
+      } else if (inputFilesList.length === 1) {
+        try {
+          await fs.rename(inputFilesList[0], finalOutputFileName)
+          console.log(
+            `Una única parte de audio guardada como: ${finalOutputFileName}`
+          )
+          await cleanupTempFiles(inputFilesList)
+          await clearProgress()
+        } catch (e) {
+          console.error(`Error al renombrar archivo: ${e.message}`)
+        }
+      } else {
+        console.log(
+          `Concatenando ${inputFilesList.length} partes de audio en ${finalOutputFileName} con FFmpeg...`
+        )
+        // Crear un archivo de texto con la lista de archivos para FFmpeg concat demuxer
+        const concatListPath = path.join(
+          currentDir,
+          `.concat_list_${Date.now()}.txt`
+        )
+        const concatListContent = inputFilesList
+          .map((file) => `file '${path.relative(currentDir, file)}'`)
+          .join('\n')
+
+        try {
+          await fs.writeFile(concatListPath, concatListContent, 'utf-8')
+
+          // Comando FFmpeg para concatenar
+          // -f concat: usa el concat demuxer
+          // -safe 0: permite rutas de archivos absolutas o relativas fuera del CWD (necesario a veces)
+          // -i <lista.txt>: el archivo de lista de entradas
+          // -c copy: copia los streams sin re-codificar (muy rápido, pero requiere que los inputs sean compatibles)
+          // <salida>: el archivo de salida
+          const command = `ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -c copy "${finalOutputFileName}"`
+          await runCommand(command)
+
+          console.log('Concatenación exitosa.')
+          await cleanupTempFiles(inputFilesList) // Eliminar archivos temporales
+          await fs.unlink(concatListPath) // Eliminar el archivo de lista de concatenación
+          await clearProgress() // Limpiar el archivo de progreso
+          console.log(`Audio completo guardado en: ${finalOutputFileName}`)
+        } catch (e) {
+          console.error('Falló la concatenación de audio:', e.message)
+        }
+      }
+    } else if (textParts.length > 0) {
+      console.log(
+        'Proceso interrumpido o incompleto. Se han guardado las partes hasta ahora.'
+      )
+      console.log(
+        `Para reanudar, ejecuta el modo TTS directo con el mismo texto/archivo.`
+      )
+    }
+
+    console.log('Modo TTS directo finalizado para esta sesión.')
+  }
+
+  rl.close()
+}
+
+       --- FIN CONTENIDO ---
+  📁 services/
+    📄 generateContent.js (316 bytes)
+       --- INICIO CONTENIDO ---
+// src/services/generateContent.js
+import { config, model } from '../config/genaiConfig.js'
+
+export async function* generateContent(ai, contents) {
+  const response = await ai.models.generateContentStream({
+    model,
+    config,
+    contents,
+  })
+  for await (const chunk of response) {
+    yield chunk.text
+  }
+}
+
+       --- FIN CONTENIDO ---
+    📄 generateTTS.js (5956 bytes)
+       --- INICIO CONTENIDO ---
+// src/services/generateTTS.js
+// Servicio para obtener audio TTS de Gemini (Google Generative AI) usando la librería oficial
+
+import { GoogleGenAI } from '@google/genai'
+import mime from 'mime'
+
+const API_KEY = process.env.GEMINI_API_KEY || 'TU_API_KEY_AQUI' // ¡Asegúrate de que GEMINI_API_KEY esté configurada!
+const MODEL = 'gemini-2.5-flash-preview-tts'
+
+/**
+ * Genera audio TTS a partir de un texto usando Gemini.
+ * Acumula chunks, maneja formatos y convierte a WAV si es necesario.
+ * @param {string} text Texto a convertir en audio.
+ * @returns {Promise<{buffer: Buffer, extension: string}>} Buffer de audio y extensión sugerida.
+ */
+export async function generateTTS(text) {
+  if (!API_KEY || API_KEY === 'TU_API_KEY_AQUI') {
+    throw new Error(
+      'Configura tu API KEY de Gemini en la variable de entorno GEMINI_API_KEY'
+    )
+  }
+  if (!text || !text.trim()) {
+    throw new Error('No se puede generar audio: el texto está vacío')
+  }
+
+  const ai = new GoogleGenAI({ apiKey: API_KEY })
+  const config = {
+    temperature: 1, // La temperatura no suele ser muy relevante para TTS, puede ser 0
+    responseModalities: ['audio'],
+    speechConfig: {
+      voiceConfig: {
+        prebuiltVoiceConfig: {
+          voiceName: 'Zephyr', // Puedes probar otras voces si quieres
+        },
+      },
+      speakingRate: 0.85, 
+      pitch: -3.0,
+    },
+  }
+
+  const contents = [
+    {
+      role: 'user',
+      parts: [{ text: text }],
+    },
+  ]
+
+  const responseStream = await ai.models.generateContentStream({
+    model: MODEL,
+    config,
+    contents,
+  })
+
+  const accumulatedBuffers = []
+  let finalExtension = 'mp3' // Asumimos un default, se actualizará con el primer chunk real
+
+  for await (const chunk of responseStream) {
+    if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
+      const inlineData = chunk.candidates[0].content.parts[0].inlineData
+      let currentBuffer = Buffer.from(inlineData.data || '', 'base64')
+      let currentExtension = mime.getExtension(inlineData.mimeType || '')
+
+      // Si mime.getExtension no pudo determinar una extensión (probablemente es audio PCM crudo),
+      // lo convertimos a WAV.
+      if (!currentExtension) {
+        currentExtension = 'wav'
+        // ¡Aquí se aplica la corrección! La función convertToWav ahora recibe el buffer BINARIO
+        // y el mimeType original para parsear sus opciones.
+        currentBuffer = convertToWav(
+          inlineData.data || '',
+          inlineData.mimeType || ''
+        )
+      }
+
+      accumulatedBuffers.push(currentBuffer)
+      finalExtension = currentExtension // La extensión del último chunk será la final
+    } else if (chunk.text) {
+      // Esto no debería suceder si responseModalities es solo 'audio'
+      console.log(
+        'Advertencia: Chunk de texto recibido en modo solo audio:',
+        chunk.text
+      )
+    }
+  }
+
+  // Concatenar todos los buffers de audio en un solo buffer final
+  const finalBuffer = Buffer.concat(accumulatedBuffers)
+
+  return { buffer: finalBuffer, extension: finalExtension }
+}
+
+// --- Funciones auxiliares para la conversión WAV ---
+// (Estas funciones fueron movidas aquí desde el script original)
+
+// Definición de la interfaz (solo si usas TypeScript, para JS puro se ignoran)
+// interface WavConversionOptions {
+//   numChannels : number,
+//   sampleRate: number,
+//   bitsPerSample: number
+// }
+
+function convertToWav(rawDataString, mimeType) {
+  const options = parseMimeType(mimeType)
+  // PASO CLAVE: Decodificar los datos base64 a un buffer binario real ANTES de obtener su longitud.
+  const audioBuffer = Buffer.from(rawDataString, 'base64')
+  const wavHeader = createWavHeader(audioBuffer.length, options) // ¡Usar la longitud del buffer BINARIO!
+
+  return Buffer.concat([wavHeader, audioBuffer])
+}
+
+function parseMimeType(mimeType) {
+  const [fileType, ...params] = mimeType.split(';').map((s) => s.trim())
+  const [_, format] = fileType.split('/')
+
+  const options = {
+    numChannels: 1, // Valor por defecto si no se especifica
+  }
+
+  if (format && format.startsWith('L')) {
+    const bits = parseInt(format.slice(1), 10)
+    if (!isNaN(bits)) {
+      options.bitsPerSample = bits
+    }
+  }
+
+  for (const param of params) {
+    const [key, value] = param.split('=').map((s) => s.trim())
+    if (key === 'rate') {
+      options.sampleRate = parseInt(value, 10)
+    }
+  }
+
+  // Asegurarse de que los valores críticos estén definidos, incluso con valores por defecto
+  // (Aunque parseMimeType no puede fallar del todo con los valores que Gemini probablemente da)
+  if (!options.sampleRate) {
+    options.sampleRate = 16000
+  } // Ejemplo de default
+  if (!options.bitsPerSample) {
+    options.bitsPerSample = 16
+  } // Ejemplo de default
+
+  return options
+}
+
+function createWavHeader(dataLength, options) {
+  const { numChannels, sampleRate, bitsPerSample } = options
+
+  // http://soundfile.sapp.org/doc/WaveFormat
+
+  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8
+  const blockAlign = (numChannels * bitsPerSample) / 8
+  const buffer = Buffer.alloc(44)
+
+  buffer.write('RIFF', 0) // ChunkID (4 bytes)
+  buffer.writeUInt32LE(36 + dataLength, 4) // ChunkSize (4 bytes) - tamaño total del archivo - 8 bytes
+  buffer.write('WAVE', 8) // Format (4 bytes)
+  buffer.write('fmt ', 12) // Subchunk1ID (4 bytes)
+  buffer.writeUInt32LE(16, 16) // Subchunk1Size (4 bytes) - 16 para PCM
+  buffer.writeUInt16LE(1, 20) // AudioFormat (2 bytes) - 1 para PCM
+  buffer.writeUInt16LE(numChannels, 22) // NumChannels (2 bytes)
+  buffer.writeUInt32LE(sampleRate, 24) // SampleRate (4 bytes)
+  buffer.writeUInt32LE(byteRate, 28) // ByteRate (4 bytes)
+  buffer.writeUInt16LE(blockAlign, 32) // BlockAlign (2 bytes)
+  buffer.writeUInt16LE(bitsPerSample, 34) // BitsPerSample (2 bytes)
+  buffer.write('data', 36) // Subchunk2ID (4 bytes)
+  buffer.writeUInt32LE(dataLength, 40) // Subchunk2Size (4 bytes) - tamaño de los datos de audio
+
+  return buffer
+}
+
+       --- FIN CONTENIDO ---
+  📁 utils/
+    📄 audioHistory.js (1198 bytes)
+       --- INICIO CONTENIDO ---
+import { promises as fs } from 'fs'
+import path from 'path'
+
+const HISTORY_FILE = path.resolve(process.cwd(), 'audio_history.json')
+
+export async function saveAudioHistory(history) {
+  try {
+    await fs.writeFile(HISTORY_FILE, JSON.stringify(history, null, 2), 'utf-8')
+  } catch (e) {
+    console.error('Error al guardar el historial de audio:', e.message)
+    throw e
+  }
+}
+
+export async function loadAudioHistory() {
+  try {
+    await fs.access(HISTORY_FILE, fs.constants.F_OK)
+    const data = await fs.readFile(HISTORY_FILE, 'utf-8')
+    return JSON.parse(data)
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      return []
+    }
+    console.error('Error al cargar el historial de audio:', e.message)
+    return []
+  }
+}
+
+// --- NUEVA FUNCIÓN ---
+export async function clearAudioHistory() {
+  // Ya existía, pero verifica que sea async
+  try {
+    await fs.unlink(HISTORY_FILE)
+    console.log(`Historial de audio eliminado: ${HISTORY_FILE}`)
+  } catch (e) {
+    if (e.code !== 'ENOENT') {
+      console.error(`Error al limpiar el historial de audio: ${e.message}`)
+      throw e
+    }
+    console.log(
+      `El historial de audio en ${HISTORY_FILE} no existe para eliminar.`
+    )
+  }
+}
+
+       --- FIN CONTENIDO ---
+    📄 chatAsk.js (5713 bytes)
+       --- INICIO CONTENIDO ---
+// src/utils/chatAsk.js
+// Coordinador principal de la lógica de chat para diferentes modos.
+
+// Importar funciones de gestión de contexto.
+// Son de src/utils/contextManager.js, no de src/modes/manageContextAndHistory.js.
+import { getLocalContext, getGeneralContext } from './contextManager.js' // <--- ¡CORRECCIÓN ESENCIAL AQUÍ!
+
+// Nota: getPrompt, buildContents, printModelResponse son inyectados como funciones.
+// Se asume que getFileContent también es inyectado si el modo lo necesita.
+// Se asume que buildContents puede recibir history, fileContent, y combinedContext.
+import inquirer from 'inquirer'
+import path from 'path'
+
+export async function chatAsk({
+  getPrompt, // Función para obtener el prompt del usuario (ej. getUserPrompt, getInquirerPrompt)
+  buildContents, // Función para construir el array de contenidos para la IA (de chatHelpers.js)
+  printModelResponse, // Función para imprimir la respuesta del modelo (de chatHelpers.js)
+  generateContent, // Función para generar contenido con la IA (ej. de services/generateContent.js)
+  ai, // Instancia de GoogleGenAI (creada en index.js)
+  history = [], // Historial de conversación (puede ser vacío)
+  saveHistory, // Función para guardar el historial (de chatHistory.js)
+  exitMessage = '', // Mensaje al salir del chat
+  getFilePath, // Opcional: Función para obtener la ruta de un archivo (de chatHelpers.js)
+  getFileContent, // Opcional: Función para leer el contenido del archivo (de chatHelpers.js)
+}) {
+  // Intentar obtener la instancia de readline si se usa getUserPrompt
+  // Esta es una solución alternativa si no se pasa directamente.
+  // Idealmente, rl sería un parámetro directo de chatAsk para modos de consola.
+  const rl =
+    typeof getPrompt === 'function' && getPrompt.name === 'getUserPrompt'
+      ? getPrompt.__rl
+      : null
+
+  // Cargar contexto general y local al inicio de la sesión
+  const generalContext = await getGeneralContext()
+  const localContext = await getLocalContext()
+
+  // Combinar los contextos, filtrando cadenas vacías y uniéndolas
+  const combinedContext = [generalContext, localContext]
+    .filter(Boolean)
+    .join('\n\n')
+
+  console.log('Iniciando chat. Escribe "salir" para terminar.')
+  if (combinedContext) {
+    console.log(`\n--- Contexto Aplicado ---`)
+    console.log(combinedContext)
+    console.log(`--- Fin Contexto ---\n`)
+  }
+
+  // Bucle principal de chat
+  const loop = async () => {
+    let userPrompt
+    let fileContent = ''
+    let filePath = ''
+
+    // Lógica para modos con o sin archivo adjunto
+    if (getFilePath && getFileContent) {
+      const { useFile } = await inquirer.prompt({
+        type: 'confirm',
+        name: 'useFile',
+        message: '¿Adjuntar archivo?',
+        default: false,
+      })
+
+      if (useFile) {
+        filePath = await getFilePath(inquirer) // Devuelve la ruta del archivo
+        if (filePath) {
+          try {
+            fileContent = await getFileContent(filePath) // Lee el contenido del archivo de forma async
+            console.log(`Archivo "${filePath}" cargado.`)
+          } catch (e) {
+            console.error(`Error al leer archivo ${filePath}: ${e.message}`)
+            fileContent = '' // Reset file content on error
+          }
+        }
+      }
+    }
+
+    userPrompt = await getPrompt() // Obtiene el prompt del usuario
+
+    if (userPrompt.toLowerCase() === 'salir') {
+      if (saveHistory) {
+        await saveHistory(history) // Guarda el historial de forma async
+        console.log(exitMessage)
+      }
+      return // Salir de la función y terminar el bucle
+    }
+
+    if (!userPrompt.trim() && !fileContent.trim()) {
+      console.log('Por favor, ingresa un prompt o selecciona un archivo.')
+      return loop() // Pide de nuevo, usando recursividad para continuar el bucle
+    }
+
+    try {
+      // Construir el objeto 'contents' para la API, incluyendo historial, prompt, archivo y contexto.
+      // buildContents ahora es responsable de ensamblar el array completo de contenidos.
+      const contents = buildContents(
+        userPrompt,
+        history,
+        fileContent,
+        combinedContext
+      )
+
+      // --- Importante: Añadir el prompt del usuario (y archivo) al historial *aquí* antes de enviar la solicitud ---
+      // Esto asegura que el historial refleje la interacción antes de la respuesta del modelo.
+      const userPartsForHistory = [{ text: userPrompt }]
+      if (fileContent.trim()) {
+        userPartsForHistory.push({
+          text: `[Archivo Adjunto: ${path.basename(
+            filePath || 'N/A'
+          )}]\n\`\`\`\n${fileContent}\n\`\`\``,
+        })
+      }
+      history.push({ role: 'user', parts: userPartsForHistory })
+
+      // Generar la respuesta del modelo en streaming
+      const responseStream = generateContent(ai, contents)
+
+      // Imprimir la respuesta y añadirla al historial (manejado por printModelResponse)
+      await printModelResponse(responseStream, history) // printModelResponse es async y añade al historial
+    } catch (error) {
+      console.error('Error durante la conversación:', error.message)
+      // Aquí podrías añadir lógica para limpiar el último mensaje de usuario del historial
+      // si la generación falló, para evitar un historial inconsistente.
+      if (history.length > 0 && history[history.length - 1].role === 'user') {
+        history.pop() // Elimina el último prompt del usuario si no hubo respuesta del modelo
+      }
+    }
+
+    // Continuar el bucle recursivamente
+    await loop()
+  }
+
+  // Iniciar el bucle de conversación
+  await loop()
+
+  // Asegurarse de cerrar la interfaz readline si se abrió
+  if (rl && typeof rl.close === 'function') {
+    rl.close()
+  }
+}
+
+       --- FIN CONTENIDO ---
+    📄 chatHelpers.js (3621 bytes)
+       --- INICIO CONTENIDO ---
+// src/utils/chatHelpers.js
+import { promises as fs } from 'fs'
+import readline from 'readline'
+import path from 'path' // Necesario para path.basename
+
+// Prompt por consola (readline)
+export function getUserPrompt(rl, message = 'Tú: ') {
+  return new Promise((resolve) => rl.question(message, resolve))
+}
+
+// Prompt usando inquirer
+export async function getInquirerPrompt(inquirer, message = 'Prompt:') {
+  const { prompt } = await inquirer.prompt({
+    type: 'input',
+    name: 'prompt',
+    message,
+  })
+  return prompt
+}
+
+// Selección de archivo usando inquirer-file-tree-selection
+export async function getFilePath(inquirer) {
+  const { useFile } = await inquirer.prompt({
+    type: 'confirm',
+    name: 'useFile',
+    message: '¿Adjuntar archivo?',
+    default: false,
+  })
+  if (!useFile) return ''
+  const { filePath } = await inquirer.prompt({
+    type: 'file-tree-selection',
+    name: 'filePath',
+    message: 'Selecciona archivo:',
+    root: '.',
+  })
+  return filePath
+}
+
+// Lee el contenido de un archivo
+export async function getFileContent(filePath) {
+  try {
+    return await fs.readFile(filePath, 'utf-8')
+  } catch (e) {
+    console.error(`Error leyendo archivo ${filePath}:`, e.message)
+    return ''
+  }
+}
+
+/**
+ * Construye el array de 'contents' para la API de Gemini.
+ * @param {string} userPrompt El texto del prompt del usuario.
+ * @param {Array<Object>} history El historial de conversación actual.
+ * @param {string} fileContent El contenido de un archivo adjunto.
+ * @param {string} combinedContext El contexto general y local combinado.
+ * @returns {Array<Object>} El array de contenidos listo para la API de Gemini.
+ */
+export function buildContents(
+  userPrompt,
+  history = [],
+  fileContent = '',
+  combinedContext = ''
+) {
+  const contents = []
+
+  // 1. Añadir el contexto si existe, como el primer mensaje del rol 'user'.
+  // Esto asegura que el contexto se envía una sola vez al inicio de la conversación.
+  if (combinedContext.trim()) {
+    contents.push({ role: 'user', parts: [{ text: combinedContext }] })
+  }
+
+  // 2. Añadir el historial de conversación existente.
+  // Si ya se añadió un contexto como mensaje de usuario,
+  // y el historial también empieza con un mensaje de usuario,
+  // es posible que quieras fusionarlos o mantenerlos separados.
+  // Para simplicidad, los añadimos después del mensaje de contexto si existe.
+  if (history && history.length > 0) {
+    contents.push(...history)
+  }
+
+  // 3. Añadir el prompt actual del usuario y el contenido del archivo (si aplica).
+  const currentUserParts = [{ text: userPrompt }]
+  if (fileContent.trim()) {
+    currentUserParts.push({
+      text: `\`\`\`file_content\n${fileContent}\n\`\`\``,
+    })
+  }
+
+  // Finalmente, añadir el mensaje actual del usuario
+  contents.push({ role: 'user', parts: currentUserParts })
+
+  return contents
+}
+
+/**
+ * Muestra la respuesta del modelo en streaming y la añade al historial.
+ * @param {AsyncIterable} responseStream El stream de respuesta del modelo.
+ * @param {Array<Object>} history El historial de conversación al que añadir la respuesta.
+ * @returns {Promise<string>} El texto completo de la respuesta del modelo.
+ */
+export async function printModelResponse(responseStream, history = []) {
+  let fullResponseText = ''
+  for await (const chunk of responseStream) {
+    if (chunk.text) {
+      process.stdout.write(chunk.text)
+      fullResponseText += chunk.text
+    }
+  }
+  process.stdout.write('\n')
+
+  if (fullResponseText.trim().length > 0) {
+    history.push({ role: 'model', parts: [{ text: fullResponseText }] })
+  }
+  return fullResponseText
+}
+
+       --- FIN CONTENIDO ---
+    📄 chatHistory.js (1237 bytes)
+       --- INICIO CONTENIDO ---
+import { promises as fs } from 'fs'
+import path from 'path'
+
+export function getHistoryFilePath(filename = 'chat_history.json') {
+  return path.resolve(process.cwd(), filename)
+}
+
+export async function loadHistory(historyFile) {
+  try {
+    await fs.access(historyFile, fs.constants.F_OK)
+    const data = await fs.readFile(historyFile, 'utf-8')
+    return JSON.parse(data)
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      return []
+    }
+    console.error('Error al cargar el historial de chat:', e.message)
+    return []
+  }
+}
+
+export async function saveHistory(historyFile, history) {
+  try {
+    await fs.writeFile(historyFile, JSON.stringify(history, null, 2), 'utf-8')
+  } catch (e) {
+    console.error('Error al guardar el historial de chat:', e.message)
+    throw e
+  }
+}
+
+// --- NUEVA FUNCIÓN ---
+export async function clearHistory(historyFile) {
+  try {
+    await fs.unlink(historyFile)
+    console.log(`Historial de chat eliminado: ${historyFile}`)
+  } catch (e) {
+    if (e.code !== 'ENOENT') {
+      console.error(
+        `Error al eliminar historial de chat ${historyFile}: ${e.message}`
+      )
+      throw e
+    }
+    console.log(
+      `El historial de chat en ${historyFile} no existe para eliminar.`
+    )
+  }
+}
+
+       --- FIN CONTENIDO ---
+    📄 chooseOutputMode.js (440 bytes)
+       --- INICIO CONTENIDO ---
+// src/utils/chooseOutputMode.js
+import inquirer from 'inquirer'
+
+export async function chooseOutputMode() {
+  const { outputMode } = await inquirer.prompt({
+    type: 'list',
+    name: 'outputMode',
+    message: '¿Cómo quieres la respuesta?',
+    choices: [
+      { name: 'Texto', value: 'texto' },
+      { name: 'Audio', value: 'audio' },
+      { name: 'Ambos', value: 'ambos' },
+    ],
+    default: 'texto',
+  })
+  return outputMode
+}
+
+       --- FIN CONTENIDO ---
+    📄 contextManager.js (3610 bytes)
+       --- INICIO CONTENIDO ---
+// src/utils/contextManager.js
+import { promises as fs } from 'fs'
+import path from 'path'
+import os from 'os' // Módulo nativo para obtener el directorio de inicio del usuario
+
+export const ASK_VANILLA_DIR = path.join(os.homedir(), '.askvanilla') // Directorio para configuraciones globales
+export const GENERAL_CONTEXT_FILE_PATH = path.join(
+  ASK_VANILLA_DIR,
+  'general_context.json'
+) // <--- EXPORTADO Y NOMBRE CLARO
+export const LOCAL_CONTEXT_FILE_NAME = '.askvanilla_context.json' // Archivo de contexto local (oculto)
+
+/**
+ * Asegura que el directorio .askvanilla en el home del usuario exista.
+ */
+async function ensureAskVanillaDir() {
+  try {
+    await fs.mkdir(ASK_VANILLA_DIR, { recursive: true })
+  } catch (e) {
+    if (e.code !== 'EEXIST') {
+      console.error(`Error al crear el directorio de AskVanilla: ${e.message}`)
+      throw e
+    }
+  }
+}
+
+/**
+ * Carga el contexto de un archivo JSON.
+ * @param {string} filePath La ruta completa al archivo de contexto.
+ * @returns {Promise<string>} El contenido del contexto como string, o una cadena vacía si no existe/error.
+ */
+async function loadContext(filePath) {
+  try {
+    await fs.access(filePath, fs.constants.F_OK) // Comprobar si el archivo existe
+    const data = await fs.readFile(filePath, 'utf-8')
+    const json = JSON.parse(data)
+    return json.text || ''
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      return '' // El archivo no existe, no es un error crítico para cargar
+    }
+    console.error(`Error al cargar el contexto desde ${filePath}: ${e.message}`)
+    return ''
+  }
+}
+
+/**
+ * Guarda el contexto en un archivo JSON.
+ * @param {string} filePath La ruta completa al archivo de contexto.
+ * @param {string} content El contenido del contexto como string.
+ */
+async function saveContext(filePath, content) {
+  try {
+    const data = JSON.stringify({ text: content.trim() }, null, 2)
+    await fs.writeFile(filePath, data, 'utf-8')
+    console.log(`Contexto guardado en: ${filePath}`)
+  } catch (e) {
+    console.error(`Error al guardar el contexto en ${filePath}: ${e.message}`)
+    throw e
+  }
+}
+
+/**
+ * Elimina un archivo de contexto.
+ * @param {string} filePath La ruta completa al archivo de contexto.
+ */
+async function deleteContext(filePath) {
+  try {
+    await fs.unlink(filePath)
+    console.log(`Contexto eliminado: ${filePath}`)
+  } catch (e) {
+    if (e.code !== 'ENOENT') {
+      console.error(
+        `Error al eliminar el contexto de ${filePath}: ${e.message}`
+      )
+      throw e
+    }
+    console.log(`El contexto en ${filePath} no existe para eliminar.`)
+  }
+}
+
+// Funciones específicas para contexto general
+export async function getGeneralContext() {
+  await ensureAskVanillaDir() // Asegurar que el directorio base exista
+  return await loadContext(GENERAL_CONTEXT_FILE_PATH) // <--- USANDO LA CONSTANTE EXPORTADA
+}
+
+export async function saveGeneralContext(content) {
+  await ensureAskVanillaDir()
+  await saveContext(GENERAL_CONTEXT_FILE_PATH, content) // <--- USANDO LA CONSTANTE EXPORTADA
+}
+
+export async function deleteGeneralContext() {
+  await deleteContext(GENERAL_CONTEXT_FILE_PATH) // <--- USANDO LA CONSTANTE EXPORTADA
+}
+
+// Funciones específicas para contexto local
+export function getLocalContextFilePath() {
+  return path.join(process.cwd(), LOCAL_CONTEXT_FILE_NAME)
+}
+
+export async function getLocalContext() {
+  return await loadContext(getLocalContextFilePath())
+}
+
+export async function saveLocalContext(content) {
+  await saveContext(getLocalContextFilePath(), content)
+}
+
+export async function deleteLocalContext() {
+  await deleteContext(getLocalContextFilePath())
+}
+
+       --- FIN CONTENIDO ---
+    📄 globalContextUtils.js (2196 bytes)
+       --- INICIO CONTENIDO ---
+// src/utils/globalContextUtils.js
+import { promises as fs } from 'fs'
+import path from 'path'
+import os from 'os'
+
+// Directorio para la configuración global de askvanilla
+const GLOBAL_CONFIG_DIR = path.join(os.homedir(), '.askvanilla_config')
+const GLOBAL_CONTEXT_FILE = path.join(GLOBAL_CONFIG_DIR, 'global_context.txt')
+
+/**
+ * Asegura que el directorio de configuración global exista.
+ */
+async function ensureGlobalConfigDirExists() {
+  try {
+    await fs.mkdir(GLOBAL_CONFIG_DIR, { recursive: true })
+  } catch (e) {
+    if (e.code !== 'EEXIST') {
+      // Ignorar si el directorio ya existe
+      console.error(
+        'Error al crear el directorio de configuración global:',
+        e.message
+      )
+      throw e
+    }
+  }
+}
+
+/**
+ * Carga el contexto global del sistema.
+ * @returns {Promise<string>} Contenido del contexto global o cadena vacía si no existe/error.
+ */
+export async function loadGlobalContext() {
+  try {
+    await fs.access(GLOBAL_CONTEXT_FILE, fs.constants.F_OK)
+    return await fs.readFile(GLOBAL_CONTEXT_FILE, 'utf-8')
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      return '' // Retorna vacío si el archivo no existe
+    }
+    console.error('Error al cargar el contexto global:', e.message)
+    return ''
+  }
+}
+
+/**
+ * Guarda el contexto global del sistema.
+ * @param {string} contextText - El texto a guardar como contexto global.
+ * @returns {Promise<void>}
+ */
+export async function saveGlobalContext(contextText) {
+  try {
+    await ensureGlobalConfigDirExists()
+    await fs.writeFile(GLOBAL_CONTEXT_FILE, contextText, 'utf-8')
+    console.log(`Contexto global guardado en: ${GLOBAL_CONTEXT_FILE}`)
+  } catch (e) {
+    console.error('Error al guardar el contexto global:', e.message)
+    throw e
+  }
+}
+
+/**
+ * Elimina el contexto global del sistema.
+ * @returns {Promise<void>}
+ */
+export async function deleteGlobalContext() {
+  try {
+    await fs.unlink(GLOBAL_CONTEXT_FILE)
+    console.log('Contexto global eliminado.')
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      console.log('El contexto global no existe para eliminar.')
+    } else {
+      console.error('Error al eliminar el contexto global:', e.message)
+      throw e
+    }
+  }
+}
+
+       --- FIN CONTENIDO ---
+    📄 parseArgs.js (896 bytes)
+       --- INICIO CONTENIDO ---
+import { promises as fs } from 'fs' // <--- CAMBIO: Usar fs.promises
+import path from 'path'
+
+// La función parseArgs DEBE ser asíncrona porque ahora lee archivos de forma asíncrona.
+export async function parseArgs(argv) {
+  // <--- CAMBIO: async function
+  const args = argv.slice(2)
+  let prompt = ''
+  let filePath = ''
+  let fileContent = ''
+  let fileIndex = args.indexOf('--file')
+  if (fileIndex !== -1 && args[fileIndex + 1]) {
+    filePath = args[fileIndex + 1]
+    args.splice(fileIndex, 2)
+    try {
+      // Usar fs.promises.readFile
+      fileContent = await fs.readFile(
+        // <--- CAMBIO: await fs.readFile
+        path.resolve(process.cwd(), filePath),
+        'utf-8'
+      )
+    } catch (e) {
+      throw new Error('No se pudo leer el archivo: ' + filePath)
+    }
+  }
+  if (args.length > 0) {
+    prompt = args.join(' ')
+  }
+  return { prompt, filePath, fileContent }
+}
+
+       --- FIN CONTENIDO ---
+    📄 saveAudioFile.js (673 bytes)
+       --- INICIO CONTENIDO ---
+import { promises as fs } from 'fs' // <--- CAMBIO: Usar fs.promises
+
+/**
+ * Guarda un buffer de audio en un archivo.
+ * @param {string} fileName
+ * @param {Buffer} content
+ * @returns {Promise<void>} Una promesa que se resuelve cuando el archivo ha sido escrito.
+ */
+export async function saveAudioFile(fileName, content) {
+  // <--- CAMBIO: async function
+  try {
+    // Usar fs.promises.writeFile
+    await fs.writeFile(fileName, content) // <--- CAMBIO: await fs.writeFile
+    console.log(`Audio guardado: ${fileName}`)
+  } catch (err) {
+    console.error(`Error guardando audio ${fileName}:`, err)
+    throw err // Re-lanzar para que el llamador pueda manejarlo
+  }
+}
+
+       --- FIN CONTENIDO ---
+    📄 splitText.js (4858 bytes)
+       --- INICIO CONTENIDO ---
+// src/utils/splitText.js
+// Contiene funciones para dividir texto, optimizadas para diferentes propósitos.
+
+/**
+ * Divide un texto en partes de máximo n líneas o n caracteres.
+ * Diseñada para preparar prompts o respuestas para Modelos de Lenguaje Grandes (LLMs).
+ * Prioriza mantener la estructura del texto (líneas, párrafos).
+ *
+ * @param {string} text - Texto a dividir.
+ * @param {number} maxLines - Máximo de líneas por parte.
+ * @param {number} maxChars - Máximo de caracteres por parte.
+ * @returns {string[]} Array de partes de texto.
+ */
+export function splitTextForLLMs(text, maxLines = 20, maxChars = 2000) {
+  const lines = text.split(/\r?\n/)
+  const parts = []
+  let buffer = ''
+  let lineCount = 0
+  for (const line of lines) {
+    // Si añadir la línea actual excede el límite de caracteres
+    // O si ya hemos alcanzado el número máximo de líneas
+    // y el buffer no está vacío, guardamos el buffer actual como una parte.
+    if (buffer.length + line.length + 1 > maxChars || lineCount >= maxLines) {
+      // +1 por el '\n'
+      if (buffer.trim().length > 0) {
+        // Solo añadir si el buffer tiene contenido real
+        parts.push(buffer.trim())
+      }
+      buffer = ''
+      lineCount = 0
+    }
+    buffer += line + '\n'
+    lineCount++
+  }
+  if (buffer.trim().length > 0) {
+    // Añadir cualquier contenido restante
+    parts.push(buffer.trim())
+  }
+  return parts
+}
+
+/**
+ * Divide un texto largo en chunks adecuados para TTS, priorizando los finales de oración y palabras.
+ * Si una oración es extremadamente larga y excede el límite, se dividirá en la última palabra válida.
+ *
+ * @param {string} text - El texto completo a dividir.
+ * @param {number} maxChunkLength - La longitud máxima de caracteres permitida por cada chunk de TTS de la API.
+ * @returns {string[]} Un array de strings, donde cada string es un chunk de texto listo para TTS.
+ */
+export function splitTextForTTS(text, maxChunkLength) {
+  if (!text) return []
+  text = text.trim() // Limpia espacios al inicio/final del texto completo
+
+  const chunks = []
+  let currentPos = 0
+
+  while (currentPos < text.length) {
+    // Tomar un segmento que es hasta el maxChunkLength.
+    let segment = text.substring(currentPos, currentPos + maxChunkLength)
+
+    if (segment.length <= 0) {
+      // Si el segmento es vacío, salir
+      break
+    }
+
+    let splitPoint = segment.length // Por defecto, se corta al final del segmento.
+
+    // Buscar el último final de oración (. ! ?) en el segmento (o el último salto de línea)
+    let lastNaturalBreak = -1
+
+    // Priorizar finales de oración: buscar la última aparición de ., !, ?
+    const sentenceEndings = /[.!?]\s*/g
+    let match
+    let tempLastNaturalBreak = -1
+    while ((match = sentenceEndings.exec(segment)) !== null) {
+      tempLastNaturalBreak = match.index + match[0].length // Posición después de la puntuación y sus espacios
+    }
+    if (tempLastNaturalBreak !== -1) {
+      lastNaturalBreak = tempLastNaturalBreak
+    }
+
+    // Si no se encontró un final de oración claro, buscar el último salto de línea
+    if (lastNaturalBreak === -1) {
+      const newLinePos = segment.lastIndexOf('\n')
+      if (newLinePos !== -1) {
+        lastNaturalBreak = newLinePos + 1 // Incluir el salto de línea
+      }
+    }
+
+    // Si aún no hay un punto de corte natural, buscar el último espacio (fin de palabra)
+    if (lastNaturalBreak === -1) {
+      lastNaturalBreak = segment.lastIndexOf(' ')
+    }
+
+    // Determinar el punto de corte final
+    if (lastNaturalBreak !== -1 && lastNaturalBreak > 0) {
+      // Si encontramos un punto de corte natural, y no está al inicio, usarlo.
+      splitPoint = lastNaturalBreak
+    } else {
+      // Si no hay punto de corte natural (ej. una palabra muy larga o sin espacios),
+      // forzamos el corte en el límite del segmento o en el último espacio cercano al final.
+      const lastSpaceInSegment = segment.lastIndexOf(' ')
+      if (
+        lastSpaceInSegment !== -1 &&
+        segment.length - lastSpaceInSegment < maxChunkLength / 4
+      ) {
+        // Si el último espacio está razonablemente cerca del final del segmento, usarlo.
+        splitPoint = lastSpaceInSegment
+      } else {
+        splitPoint = segment.length // Sino, corta al final del segmento (palabra larga o sin espacios).
+      }
+    }
+
+    // Asegurarse de que el chunk no esté vacío y añadirlo
+    let chunk = text.substring(currentPos, currentPos + splitPoint).trim()
+    if (chunk.length > 0) {
+      chunks.push(chunk)
+    }
+
+    // Avanzar la posición actual para el siguiente chunk
+    currentPos += splitPoint
+    // Eliminar posibles espacios/saltos de línea iniciales sobrantes en el siguiente segmento
+    while (currentPos < text.length && /\s/.test(text[currentPos])) {
+      currentPos++
+    }
+  }
+
+  return chunks
+}
+
+       --- FIN CONTENIDO ---
+    📄 ttsHelpers.js (567 bytes)
+       --- INICIO CONTENIDO ---
+// Llama a generateTTS y guarda el archivo de audio
+export async function handleTTS({
+  responseText,
+  generateTTS,
+  saveAudioFile,
+  audioPrefix = 'audio_part',
+  partIdx = 0,
+}) {
+  if (!responseText) return ''
+  try {
+    const { buffer, extension } = await generateTTS(responseText)
+    const audioFileName = `${audioPrefix}_${partIdx + 1}.${extension}`
+    saveAudioFile(audioFileName, buffer)
+    console.log(`Audio guardado: ${audioFileName}`)
+    return audioFileName
+  } catch (e) {
+    console.log('Error generando audio:', e.message)
+    return ''
+  }
+}
+
+       --- FIN CONTENIDO ---
+
+--- Script Finalizado ---

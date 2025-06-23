@@ -1,8 +1,7 @@
-// src/utils/parseArgs.js
-import fs from 'fs'
+import { promises as fs } from 'fs'
 import path from 'path'
 
-export function parseArgs(argv) {
+export async function parseArgs(argv) {
   const args = argv.slice(2)
   let prompt = ''
   let filePath = ''
@@ -12,7 +11,7 @@ export function parseArgs(argv) {
     filePath = args[fileIndex + 1]
     args.splice(fileIndex, 2)
     try {
-      fileContent = fs.readFileSync(
+      fileContent = await fs.readFile(
         path.resolve(process.cwd(), filePath),
         'utf-8'
       )

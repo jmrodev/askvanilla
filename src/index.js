@@ -1,4 +1,3 @@
-// src/index.js
 import { createGenAIClient } from './client/genaiClient.js'
 import { generateContent } from './services/generateContent.js'
 import inquirer from 'inquirer'
@@ -9,14 +8,18 @@ import { parseArgs } from './utils/parseArgs.js'
 import { chatModeWithMemoryFile } from './modes/chatWithMemoryFile.js'
 import { chatModeNoMemoryFile } from './modes/chatNoMemoryFile.js'
 import { generateTTS } from './services/generateTTS.js'
+import { pureTTSMode } from './modes/pureTTS.js'
+import { manageContextAndHistoryMenu } from './modes/contextHistoryManager.js'
+
+import EditorPrompt from 'inquirer/lib/prompts/editor.js'
+inquirer.registerPrompt('editor', EditorPrompt)
 
 const ai = createGenAIClient(process.env.GEMINI_API_KEY)
 
 async function main() {
-  // Modularizado: parsear argumentos y archivo
   let parsed
   try {
-    parsed = parseArgs(process.argv)
+    parsed = await parseArgs(process.argv)
   } catch (e) {
     console.error(e.message)
     process.exit(1)
@@ -35,7 +38,7 @@ async function main() {
     process.stdout.write('\n')
     return
   }
-  // Menú interactivo con inquirer
+
   const { mode } = await inquirer.prompt([
     {
       type: 'list',
@@ -47,19 +50,35 @@ async function main() {
         { name: '3) Chat sin memoria', value: '3' },
         { name: '4) Chat con memoria prompt+archivo', value: '4' },
         { name: '5) Chat sin memoria prompt+archivo', value: '5' },
+        { name: '6) TTS Directo (Texto a Voz)', value: 'pureTTS' },
+        {
+          name: '7) Gestionar Contexto e Historial',
+          value: 'manageContextHistory',
+        },
+        { name: 'Salir', value: 'exit' },
       ],
     },
   ])
+
   if (mode === '2') {
     await chatModeWithMemory(ai, generateContent)
   } else if (mode === '3') {
     await chatModeNoMemory(ai, generateContent)
   } else if (mode === '4') {
-    await chatModeWithMemoryFile(ai, generateContent, generateTTS)
+    await chatModeWithMemoryFile(ai, generateContent)
   } else if (mode === '5') {
     await chatModeNoMemoryFile(ai, generateContent)
-  } else {
+  } else if (mode === 'pureTTS') {
+    await pureTTSMode()
+  } else if (mode === 'manageContextHistory') {
+    await manageContextAndHistoryMenu()
+  } else if (mode === '1') {
     await interactiveMode(ai, generateContent)
+  } else if (mode === 'exit') {
+    console.log('Saliendo de la aplicación. ¡Hasta pronto!')
+    process.exit(0)
+  } else {
+    console.log('Modo no reconocido.')
   }
 }
 

@@ -1,12 +1,17 @@
-// src/utils/saveAudioFile.js
-import fs from 'fs'
+import { promises as fs } from 'fs'
 
 /**
  * Guarda un buffer de audio en un archivo.
  * @param {string} fileName
  * @param {Buffer} content
+ * @returns {Promise<void>} Una promesa que se resuelve cuando el archivo ha sido escrito.
  */
-export function saveAudioFile(fileName, content) {
-  fs.writeFileSync(fileName, content)
-  console.log(`Audio guardado: ${fileName}`)
+export async function saveAudioFile(fileName, content) {
+  try {
+    await fs.writeFile(fileName, content)
+    console.log(`Audio guardado: ${fileName}`)
+  } catch (err) {
+    console.error(`Error guardando audio ${fileName}:`, err)
+    throw err
+  }
 }

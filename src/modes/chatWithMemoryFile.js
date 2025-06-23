@@ -1,153 +1,106 @@
 import inquirer from 'inquirer'
 import FileTreeSelectionPrompt from 'inquirer-file-tree-selection-prompt'
-import fs from 'fs'
-import path from 'path'
-import { splitText } from '../utils/splitText.js'
+import {
+  getInquirerPrompt,
+  getFilePath,
+  getFileContent,
+  printModelResponse,
+} from '../utils/chatHelpers.js'
+import { chatAsk } from '../utils/chatAsk.js'
+import {
+  getHistoryFilePath,
+  loadHistory,
+  saveHistory,
+} from '../utils/chatHistory.js'
 import { chooseOutputMode } from '../utils/chooseOutputMode.js'
+import { generateTTS } from '../services/generateTTS.js'
 import { saveAudioFile } from '../utils/saveAudioFile.js'
-import { loadAudioHistory, saveAudioHistory } from '../utils/audioHistory.js'
+import { handleTTS } from '../utils/ttsHelpers.js'
+import { ContextHistoryManager } from './contextHistoryManager.js'
+import { splitTextForLLMs } from '../utils/splitText.js'
+
 inquirer.registerPrompt('file-tree-selection', FileTreeSelectionPrompt)
 
-export async function chatModeWithMemoryFile(ai, generateContent, generateTTS) {
-  const historyFile = path.resolve(process.cwd(), 'chat_history_file.json')
-  const audioHistoryFile = path.resolve(
-    process.cwd(),
-    'audio_history_file.json'
-  )
-  let history = []
-  let audioHistory = []
-  // Leer historial si existe
-  if (fs.existsSync(historyFile)) {
-    try {
-      const data = fs.readFileSync(historyFile, 'utf-8')
-      history = JSON.parse(data)
-    } catch (e) {
-      history = []
-    }
-  }
-  if (fs.existsSync(audioHistoryFile)) {
-    try {
-      audioHistory = loadAudioHistory(audioHistoryFile)
-    } catch (e) {
-      audioHistory = []
-    }
-  }
+const MAX_FILE_PART_CHARS_FOR_LLM = 100 * 1024
 
-  async function ask() {
-    const { prompt } = await inquirer.prompt({
-      type: 'input',
-      name: 'prompt',
-      message: 'Prompt:',
-    })
-    let filePath = ''
-    const { useFile } = await inquirer.prompt({
-      type: 'confirm',
-      name: 'useFile',
-      message: '¿Adjuntar archivo?',
-      default: false,
-    })
-    if (useFile) {
-      const fileAnswer = await inquirer.prompt({
-        type: 'file-tree-selection',
-        name: 'filePath',
-        message: 'Selecciona archivo:',
-        root: '.',
-      })
-      filePath = fileAnswer.filePath
-    }
-    let userText = prompt
-    let fileContent = ''
-    if (filePath) {
-      try {
-        fileContent = fs.readFileSync(
-          path.resolve(process.cwd(), filePath),
-          'utf-8'
-        )
-      } catch (e) {
-        console.log('No se pudo leer el archivo, se omite.')
+export async function chatModeWithMemoryFile(ai, generateContent) {
+  const historyFile = getHistoryFilePath('chat_memory_file_history.json')
+  let history = await loadHistory(historyFile)
+
+  const contextManager = new ContextHistoryManager(history)
+
+  await chatAsk({
+    getPrompt: () => getInquirerPrompt(inquirer),
+    getFilePath: () => getFilePath(inquirer),
+    getFileContent,
+    buildContents: (
+      userPrompt,
+      chatAskHistory,
+      fileContent,
+      combinedContext
+    ) => {
+      const currentUserTurnParts = []
+      if (userPrompt) {
+        currentUserTurnParts.push({ text: userPrompt })
       }
-    }
-    if (userText.trim().toLowerCase() === 'salir') {
-      // Guardar historial al salir
-      try {
-        fs.writeFileSync(historyFile, JSON.stringify(history, null, 2), 'utf-8')
-        saveAudioHistory(audioHistoryFile, audioHistory)
-        console.log(`Historial guardado en: ${historyFile}`)
-      } catch (e) {}
-      return
-    }
 
-    // Selección de modo de salida (texto, audio, ambos)
-    const outputMode = await chooseOutputMode()
+      if (fileContent && fileContent.trim().length > 0) {
+        currentUserTurnParts.push({ text: `[Archivo Adjunto]\n` })
 
-    // Dividir texto largo en partes
-    let allParts = []
-    if (userText) allParts.push(userText)
-    if (fileContent) allParts.push(fileContent)
-    // Usar splitText para dividir cada parte si es necesario
-    let splitParts = []
-    for (const part of allParts) {
-      splitParts = splitParts.concat(splitText(part))
-    }
+        const fileContentChunks = splitTextForLLMs(
+          fileContent,
+          0,
+          MAX_FILE_PART_CHARS_FOR_LLM
+        )
 
-    // Reanudar desde la última parte procesada si hay historial
-    let startIdx = 0
-    if (audioHistory.length > 0) {
-      startIdx = audioHistory[audioHistory.length - 1].partIdx + 1
-      if (startIdx < splitParts.length) {
-        console.log(
-          `Reanudando desde la parte ${startIdx + 1} de ${splitParts.length}`
+        if (fileContentChunks.length > 1) {
+          console.log(
+            `El contenido del archivo se ha dividido en ${fileContentChunks.length} partes para el LLM.`
+          )
+        }
+
+        fileContentChunks.forEach((chunk, index) => {
+          currentUserTurnParts.push({
+            text: `\`\`\`file_part_${index + 1}\n${chunk}\n\`\`\``,
+          })
+        })
+      }
+
+      let contents = contextManager.manageContext(
+        combinedContext,
+        chatAskHistory
+      )
+
+      contents.push({ role: 'user', parts: currentUserTurnParts })
+
+      if (!Array.isArray(contents)) {
+        console.error('----------------------------------------------------')
+        console.error(
+          'ERROR CRÍTICO: ContextHistoryManager.manageContext o la construcción final no devolvió un array.'
+        )
+        console.error('Tipo de dato devuelto:', typeof contents)
+        console.error('Valor devuelto:', contents)
+        console.error(
+          'Revisa la implementación de ContextHistoryManager.manageContext y el override de buildContents.'
+        )
+        console.error('----------------------------------------------------')
+        throw new Error(
+          'El gestor de contexto o buildContents devolvió un valor no iterable para "contents".'
         )
       }
-    }
 
-    for (let i = startIdx; i < splitParts.length; i++) {
-      const part = splitParts[i]
-      const userEntry = { role: 'user', parts: [{ text: part }] }
-      history.push(userEntry)
-      const contents = [...history]
-      let responseText = ''
-      // Siempre obtener respuesta de Gemini (texto), aunque solo se quiera audio
-      for await (const text of generateContent(ai, contents)) {
-        if (outputMode === 'texto' || outputMode === 'ambos') {
-          process.stdout.write(text)
-        }
-        responseText += text
-      }
-      if (outputMode === 'texto' || outputMode === 'ambos') {
-        process.stdout.write('\n')
-      }
-      // Guardar respuesta en historial
-      const modelEntry = { role: 'model', parts: [{ text: responseText }] }
-      history.push(modelEntry)
-      // TTS: obtener y guardar audio si corresponde
-      let audioFilePath = ''
-      if (outputMode === 'audio' || outputMode === 'ambos') {
-        try {
-          const { buffer, extension } = await generateTTS(responseText)
-          const audioFileName = `audio_part_${i + 1}.${extension}`
-          saveAudioFile(audioFileName, buffer)
-          audioFilePath = audioFileName
-          console.log(`Audio guardado: ${audioFilePath}`)
-        } catch (e) {
-          console.log('Error generando audio:', e.message)
-        }
-      }
-      // Actualizar historial de audio/texto
-      audioHistory.push({
-        partIdx: i,
-        prompt: part,
-        response: responseText,
-        audioFile: audioFilePath,
-        timestamp: new Date().toISOString(),
-      })
-      saveAudioHistory(audioHistoryFile, audioHistory)
-      // Persistir historial de chat tras cada parte
-      fs.writeFileSync(historyFile, JSON.stringify(history, null, 2), 'utf-8')
-    }
-    // Mensaje de finalización
-    console.log('Conversación finalizada para este prompt/archivo.')
-    ask()
-  }
-  ask()
+      return contents
+    },
+    printModelResponse,
+    generateContent,
+    generateTTS,
+    saveAudioFile,
+    handleTTS,
+    ai,
+    history: contextManager.history,
+    saveHistory: (h) => saveHistory(historyFile, h),
+    exitMessage: `Historial y contexto guardados en: ${historyFile}`,
+    outputMode: await chooseOutputMode(),
+    contextManager,
+  })
 }

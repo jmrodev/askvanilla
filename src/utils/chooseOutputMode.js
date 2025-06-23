@@ -7,10 +7,11 @@ export async function chooseOutputMode() {
     name: 'outputMode',
     message: '¿Cómo quieres la respuesta?',
     choices: [
-      { name: 'Texto', value: 'text' },
+      { name: 'Texto', value: 'texto' },
       { name: 'Audio', value: 'audio' },
-      { name: 'Ambos', value: 'both' },
+      { name: 'Ambos', value: 'ambos' },
     ],
+    default: 'texto',
   })
   return outputMode
 }
