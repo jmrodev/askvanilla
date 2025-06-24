@@ -45,3 +45,46 @@ export async function clearHistory(historyFile) {
     )
   }
 }
+
+/**
+ * Añade un mensaje de usuario al historial.
+ * @param {Array} history - El historial de la conversación.
+ * @param {string} userPrompt - El texto del usuario.
+ * @param {string} fileContent - El contenido del archivo adjunto.
+ * @param {string} filePath - La ruta del archivo adjunto.
+ */
+export function addUserMessage(history, userPrompt, fileContent = '', filePath = '') {
+  const userPartsForHistory = [{ text: userPrompt }]
+  if (fileContent && fileContent.trim()) {
+    userPartsForHistory.push({ text: formatUserMessageWithFile(fileContent, filePath) })
+  }
+  history.push({ role: 'user', parts: userPartsForHistory })
+}
+
+/**
+ * Añade un mensaje del modelo al historial.
+ * @param {Array} history - El historial de la conversación.
+ * @param {string} modelText - El texto de respuesta del modelo.
+ */
+export function addModelMessage(history, modelText) {
+  if (modelText && modelText.trim().length > 0) {
+    history.push({ role: 'model', parts: [{ text: modelText }] })
+  } else {
+    history.push({ role: 'model', parts: [{ text: '[No response from model]' }] })
+  }
+}
+
+/**
+ * Formatea el mensaje de usuario con archivo adjunto para el historial.
+ * @param {string} fileContent - El contenido del archivo adjunto.
+ * @param {string} filePath - La ruta del archivo adjunto.
+ * @returns {string} - El texto formateado para el historial.
+ */
+export function formatUserMessageWithFile(fileContent, filePath = '') {
+  const historyFileDisplayLimit = 2000
+  if (fileContent.length > historyFileDisplayLimit) {
+    return `[Archivo Adjunto: ${path.basename(filePath || 'N/A')} - ${fileContent.length} caracteres truncados para historial]\n\n${fileContent.substring(0, historyFileDisplayLimit)}...\n\n`
+  } else {
+    return `[Archivo Adjunto: ${path.basename(filePath || 'N/A')}]\n\n${fileContent}\n\n`
+  }
+}

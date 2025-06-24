@@ -104,3 +104,13 @@ export async function saveLocalContext(content) {
 export async function deleteLocalContext() {
   await deleteContext(getLocalContextFilePath())
 }
+
+/**
+ * Obtiene y combina el contexto general y local en un solo string.
+ * @returns {Promise<string>} El contexto combinado.
+ */
+export async function getCombinedContext() {
+  const generalContext = await getGeneralContext()
+  const localContext = await getLocalContext()
+  return [generalContext, localContext].filter(Boolean).join('\n\n')
+}

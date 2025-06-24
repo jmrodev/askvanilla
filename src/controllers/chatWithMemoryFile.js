@@ -6,18 +6,24 @@ import {
   getFileContent,
   printModelResponse,
 } from '../utils/chatHelpers.js'
-import { chatAsk } from '../utils/chatAsk.js'
+import { chatAsk } from './chatAsk.js'
 import {
   getHistoryFilePath,
   loadHistory,
   saveHistory,
+  addUserMessage,
+  addModelMessage,
 } from '../utils/chatHistory.js'
 import { chooseOutputMode } from '../utils/chooseOutputMode.js'
 import { generateTTS } from '../services/generateTTS.js'
 import { saveAudioFile } from '../utils/saveAudioFile.js'
-import { handleTTS } from '../utils/ttsHelpers.js'
+import { handleTTS } from '../services/tts/ttsHelpers.js'
+import { generateAndSaveTTS } from '../services/tts/ttsHelpers.js'
 import { ContextHistoryManager } from './contextHistoryManager.js'
 import { splitTextForLLMs } from '../utils/splitText.js'
+import { getCombinedContext } from '../utils/contextManager.js'
+import { showChatIntroAndContext } from '../utils/chatHelpers.js'
+import { MAX_LLM_FILE_PART_LINES, MAX_LLM_FILE_PART_CHARS } from '../utils/constants.js'
 
 inquirer.registerPrompt('file-tree-selection', FileTreeSelectionPrompt)
 
@@ -49,8 +55,8 @@ export async function chatModeWithMemoryFile(ai, generateContent) {
 
         const fileContentChunks = splitTextForLLMs(
           fileContent,
-          0,
-          MAX_FILE_PART_CHARS_FOR_LLM
+          MAX_LLM_FILE_PART_LINES,
+          MAX_LLM_FILE_PART_CHARS
         )
 
         if (fileContentChunks.length > 1) {
@@ -61,7 +67,7 @@ export async function chatModeWithMemoryFile(ai, generateContent) {
 
         fileContentChunks.forEach((chunk, index) => {
           currentUserTurnParts.push({
-            text: `\`\`\`file_part_${index + 1}\n${chunk}\n\`\`\``,
+            text: `\file_part_${index + 1}\n${chunk}\n\`,
           })
         })
       }
@@ -102,5 +108,10 @@ export async function chatModeWithMemoryFile(ai, generateContent) {
     exitMessage: `Historial y contexto guardados en: ${historyFile}`,
     outputMode: await chooseOutputMode(),
     contextManager,
+    getCombinedContext,
+    showChatIntroAndContext,
+    addUserMessage,
+    addModelMessage,
+    generateAndSaveTTS,
   })
-}
+} 

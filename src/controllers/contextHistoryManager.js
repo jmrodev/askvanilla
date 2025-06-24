@@ -198,15 +198,6 @@ export async function manageContextAndHistoryMenu() {
         break
     }
 
-    const displayPath = filePath || 'N/A'
-
-    await handleContextHistoryAction(
-      displayName,
-      displayPath,
-      loadFn,
-      saveFn,
-      deleteFn
-    )
+    await handleContextHistoryAction(type, filePath, loadFn, saveFn, deleteFn)
   }
-  console.log('Saliendo del gestor de contexto e historial.')
-}
+} 

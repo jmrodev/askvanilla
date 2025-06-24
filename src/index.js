@@ -1,15 +1,17 @@
 import { createGenAIClient } from './client/genaiClient.js'
 import { generateContent } from './services/generateContent.js'
 import inquirer from 'inquirer'
-import { interactiveMode } from './modes/interactive.js'
-import { chatModeWithMemory } from './modes/chatWithMemory.js'
-import { chatModeNoMemory } from './modes/chatNoMemory.js'
+import { interactiveMode } from './controllers/interactive.js'
+import { chatModeWithMemory } from './controllers/chatWithMemory.js'
+import { chatModeNoMemory } from './controllers/chatNoMemory.js'
 import { parseArgs } from './utils/parseArgs.js'
-import { chatModeWithMemoryFile } from './modes/chatWithMemoryFile.js'
-import { chatModeNoMemoryFile } from './modes/chatNoMemoryFile.js'
+import { chatModeWithMemoryFile } from './controllers/chatWithMemoryFile.js'
+import { chatModeNoMemoryFile } from './controllers/chatNoMemoryFile.js'
 import { generateTTS } from './services/generateTTS.js'
-import { pureTTSMode } from './modes/pureTTS.js'
-import { manageContextAndHistoryMenu } from './modes/contextHistoryManager.js'
+import { pureTTSMode } from './controllers/pureTTS.js'
+import { manageContextAndHistoryMenu } from './controllers/contextHistoryManager.js'
+import { selectConversationMode } from './controllers/selectConversationMode.js'
+import { handlePromptWithFile, handleConversationMode } from './utils/chatHelpers.js'
 
 import EditorPrompt from 'inquirer/lib/prompts/editor.js'
 inquirer.registerPrompt('editor', EditorPrompt)
@@ -18,6 +20,7 @@ const ai = createGenAIClient(process.env.GEMINI_API_KEY)
 
 async function main() {
   let parsed
+  const debug = process.argv.includes('--debug')
   try {
     parsed = await parseArgs(process.argv)
   } catch (e) {
@@ -26,60 +29,33 @@ async function main() {
   }
   const { prompt, fileContent } = parsed
   if (fileContent) {
-    const contents = [
-      {
-        role: 'user',
-        parts: [{ text: prompt || '(sin prompt)' }, { text: fileContent }],
-      },
-    ]
-    for await (const text of generateContent(ai, contents)) {
-      process.stdout.write(text)
-    }
-    process.stdout.write('\n')
+    await handlePromptWithFile({
+      ai,
+      prompt,
+      fileContent,
+      generateContent: (ai, contents) => generateContent(ai, contents, debug),
+      printModelResponse: (stream, mode) => printModelResponse(stream, mode, debug),
+    })
     return
   }
 
-  const { mode } = await inquirer.prompt([
-    {
-      type: 'list',
-      name: 'mode',
-      message: 'Selecciona modo:',
-      choices: [
-        { name: '1) Interactivo', value: '1' },
-        { name: '2) Chat con memoria', value: '2' },
-        { name: '3) Chat sin memoria', value: '3' },
-        { name: '4) Chat con memoria prompt+archivo', value: '4' },
-        { name: '5) Chat sin memoria prompt+archivo', value: '5' },
-        { name: '6) TTS Directo (Texto a Voz)', value: 'pureTTS' },
-        {
-          name: '7) Gestionar Contexto e Historial',
-          value: 'manageContextHistory',
-        },
-        { name: 'Salir', value: 'exit' },
-      ],
-    },
-  ])
+  const mode = await selectConversationMode()
 
-  if (mode === '2') {
-    await chatModeWithMemory(ai, generateContent)
-  } else if (mode === '3') {
-    await chatModeNoMemory(ai, generateContent)
-  } else if (mode === '4') {
-    await chatModeWithMemoryFile(ai, generateContent)
-  } else if (mode === '5') {
-    await chatModeNoMemoryFile(ai, generateContent)
-  } else if (mode === 'pureTTS') {
-    await pureTTSMode()
-  } else if (mode === 'manageContextHistory') {
-    await manageContextAndHistoryMenu()
-  } else if (mode === '1') {
-    await interactiveMode(ai, generateContent)
-  } else if (mode === 'exit') {
-    console.log('Saliendo de la aplicación. ¡Hasta pronto!')
-    process.exit(0)
-  } else {
-    console.log('Modo no reconocido.')
-  }
+  await handleConversationMode({
+    mode,
+    ai,
+    generateContent: (ai, contents) => generateContent(ai, contents, debug),
+    printModelResponse: (stream, mode) => printModelResponse(stream, mode, debug),
+    chatModes: {
+      chatModeWithMemory,
+      chatModeNoMemory,
+      chatModeWithMemoryFile,
+      chatModeNoMemoryFile,
+      pureTTSMode,
+      manageContextAndHistoryMenu,
+      interactiveMode
+    }
+  })
 }
 
 main()

@@ -7,7 +7,7 @@ import {
   buildContents,
   printModelResponse,
 } from '../utils/chatHelpers.js'
-import { chatAsk } from '../utils/chatAsk.js'
+import { chatAsk } from './chatAsk.js'
 inquirer.registerPrompt('file-tree-selection', FileTreeSelectionPrompt)
 
 export async function chatModeNoMemoryFile(ai, generateContent) {
@@ -20,4 +20,4 @@ export async function chatModeNoMemoryFile(ai, generateContent) {
     generateContent,
     ai,
   })
-}
+} 

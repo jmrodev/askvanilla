@@ -13,4 +13,4 @@ export async function interactiveMode(ai, generateContent) {
     process.stdout.write('\n')
     rl.close()
   })
-}
+} 

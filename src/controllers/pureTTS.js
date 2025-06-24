@@ -199,94 +199,38 @@ export async function pureTTSMode() {
         continue
       }
 
-      const part = textParts[i]
-      console.log(
-        `Generando audio para la parte ${i + 1}/${textParts.length} (${
-          part.length
-        } caracteres)...`
-      )
+      const textPart = textParts[i]
+      const textHash = Buffer.from(textPart).toString('base64')
 
-      const tempAudioFileName = path.join(currentDir, `.temp_tts_part_${i}.wav`)
-
-      try {
-        const { buffer, extension } = await generateTTS(part)
-        await saveAudioFile(tempAudioFileName, buffer)
+      if (progress.textHash !== textHash) {
         console.log(
-          `Parte ${i + 1} guardada temporalmente: ${tempAudioFileName}`
+          `Texto nuevo o modificado detectado. Iniciando nueva parte TTS.`
         )
-
-        progress.completedParts.push(i)
-        progress.tempFiles.push(tempAudioFileName)
+        await cleanupTempFiles(progress.tempFiles)
+        progress.textHash = textHash
+        progress.completedParts = []
+        progress.tempFiles = []
         await saveProgress(progress)
-
-        finalOutputExtension = extension
-      } catch (error) {
-        console.error(
-          `Error al generar audio para la parte ${i + 1}:`,
-          error.message
-        )
-        break
-      }
-    }
-
-    if (
-      progress.completedParts.length === textParts.length &&
-      textParts.length > 0
-    ) {
-      const finalOutputFileName = `pure_tts_output_combined_${Date.now()}.${finalOutputExtension}`
-      const inputFilesList = progress.tempFiles
-
-      if (inputFilesList.length === 0) {
-        console.log('No hay partes de audio para concatenar.')
-      } else if (inputFilesList.length === 1) {
-        try {
-          await fs.rename(inputFilesList[0], finalOutputFileName)
-          console.log(
-            `Una única parte de audio guardada como: ${finalOutputFileName}`
-          )
-          await cleanupTempFiles(inputFilesList)
-          await clearProgress()
-        } catch (e) {
-          console.error(`Error al renombrar archivo: ${e.message}`)
-        }
       } else {
         console.log(
-          `Concatenando ${inputFilesList.length} partes de audio en ${finalOutputFileName} con FFmpeg...`
+          `Reanudando desde la parte ${progress.completedParts.length + 1}.`
         )
-        const concatListPath = path.join(
-          currentDir,
-          `.concat_list_${Date.now()}.txt`
-        )
-        const concatListContent = inputFilesList
-          .map((file) => `file '${path.relative(currentDir, file)}'`)
-          .join('\n')
-
-        try {
-          await fs.writeFile(concatListPath, concatListContent, 'utf-8')
-
-          const command = `ffmpeg -y -f concat -safe 0 -i "${concatListPath}" -c copy "${finalOutputFileName}"`
-          await runCommand(command)
-
-          console.log('Concatenación exitosa.')
-          await cleanupTempFiles(inputFilesList)
-          await fs.unlink(concatListPath)
-          await clearProgress()
-          console.log(`Audio completo guardado en: ${finalOutputFileName}`)
-        } catch (e) {
-          console.error('Falló la concatenación de audio:', e.message)
-        }
       }
-    } else if (textParts.length > 0) {
-      console.log(
-        'Proceso interrumpido o incompleto. Se han guardado las partes hasta ahora.'
-      )
-      console.log(
-        `Para reanudar, ejecuta el modo TTS directo con el mismo texto/archivo.`
-      )
+
+      const audioData = await generateTTS(textPart)
+      const tempFilePath = await saveAudioFile(audioData, finalOutputExtension)
+      progress.tempFiles.push(tempFilePath)
+      progress.completedParts.push(i)
+      await saveProgress(progress)
+
+      console.log(`Parte ${i + 1}/${textParts.length} generada correctamente.`)
     }
 
-    console.log('Modo TTS directo finalizado para esta sesión.')
-  }
+    await cleanupTempFiles(progress.tempFiles)
+    progress.completedParts = []
+    progress.tempFiles = []
+    await saveProgress(progress)
 
-  rl.close()
-}
+    console.log('\n--- Fin de la conversión ---')
+  }
+} 
