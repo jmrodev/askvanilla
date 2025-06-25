@@ -1,4 +1,7 @@
 import { TTS_CHARACTER_LIMIT } from '../../utils/constants.js'
+import { generateTTS } from '../generateTTS.js'
+import { saveAudioFile } from '../../../utils/saveAudioFile.js'
+import path from 'path'
 
 export async function handleTTS({
   responseText,
@@ -43,4 +46,14 @@ export async function generateAndSaveTTS(fullResponseText, generateTTS, saveAudi
       partIdx: i,
     })
   }
+}
+
+export async function generateAndSaveAudioPart(textPart, partIndex, extension = 'wav') {
+  const { buffer } = await generateTTS(textPart)
+  const tempFilePath = path.join(
+    process.cwd(),
+    `tts_part_${partIndex + 1}_${Date.now()}.${extension}`
+  )
+  await saveAudioFile(tempFilePath, buffer)
+  return tempFilePath
 } 

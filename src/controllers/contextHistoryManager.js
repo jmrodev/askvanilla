@@ -21,6 +21,9 @@ import {
   saveHistory,
 } from '../utils/chatHistory.js'
 import { loadAudioHistory, clearAudioHistory } from '../utils/audioHistory.js'
+import { promptContextMenu } from '../utils/contextUserInterface.js'
+import { handleContextAction } from '../utils/contextHelpers.js'
+import * as CONTEXT_CONFIG from '../config/contextConfig.js'
 
 inquirer.registerPrompt('editor', EditorPrompt)
 
@@ -146,58 +149,8 @@ async function handleContextHistoryAction(
 
 export async function manageContextAndHistoryMenu() {
   while (true) {
-    const { type } = await inquirer.prompt({
-      type: 'list',
-      name: 'type',
-      message: 'Gestionar:',
-      choices: [
-        { name: '1) Contexto General', value: 'generalContext' },
-        { name: '2) Contexto Local (proyecto actual)', value: 'localContext' },
-        { name: '3) Historial de Chat Local', value: 'chatHistory' },
-        { name: '4) Historial de Audio Local', value: 'audioHistory' },
-        { name: '5) Volver al menú principal', value: 'back' },
-      ],
-    })
-
+    const { type } = await promptContextMenu()
     if (type === 'back') break
-
-    let filePath
-    let loadFn
-    let saveFn
-    let deleteFn
-    let displayName
-
-    switch (type) {
-      case 'generalContext':
-        filePath = GENERAL_CONTEXT_FILE_PATH
-        loadFn = getGeneralContext
-        saveFn = saveGeneralContext
-        deleteFn = deleteGeneralContext
-        displayName = 'Contexto General'
-        break
-      case 'localContext':
-        filePath = getLocalContextFilePath()
-        loadFn = getLocalContext
-        saveFn = saveLocalContext
-        deleteFn = deleteLocalContext
-        displayName = 'Contexto Local'
-        break
-      case 'chatHistory':
-        filePath = getHistoryFilePath('chat_history.json')
-        loadFn = loadHistory
-        saveFn = null
-        deleteFn = clearHistory
-        displayName = 'Historial de Chat Local'
-        break
-      case 'audioHistory':
-        filePath = path.join(process.cwd(), 'audio_history.json')
-        loadFn = null
-        saveFn = null
-        deleteFn = clearAudioHistory
-        displayName = 'Historial de Audio Local'
-        break
-    }
-
-    await handleContextHistoryAction(type, filePath, loadFn, saveFn, deleteFn)
+    await handleContextAction(type, CONTEXT_CONFIG)
   }
 } 

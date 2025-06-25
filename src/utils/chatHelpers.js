@@ -112,7 +112,7 @@ export async function printModelResponse(responseStream, outputMode = 'texto', d
     }
   }
   if (outputMode === 'texto' || outputMode === 'ambos') {
-    process.stdout.write('\n')
+  process.stdout.write('\n')
   }
   return fullResponseText
 }
