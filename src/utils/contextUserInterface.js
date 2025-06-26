@@ -40,4 +40,8 @@ export function showError(msg) {
 
 export function showInfo(msg) {
   logInfo(msg)
+}
+
+export function showWarning(msg) {
+  logWarning(msg)
 } 
