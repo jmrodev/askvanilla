@@ -1,0 +1,38 @@
+{
+  "app": {
+    "name": "AskVanilla",
+    "version": "1.0.0",
+    "debug": false
+  },
+  "ai": {
+    "model": "gemini-1.5-flash",
+    "temperature": 0.7,
+    "maxTokens": 8192,
+    "timeout": 30000
+  },
+  "file": {
+    "maxSize": 10485760,
+    "maxFiles": 50,
+    "supportedExtensions": [
+      ".txt", ".md", ".json", ".js", ".jsx", ".ts", ".tsx",
+      ".py", ".java", ".cpp", ".c", ".cs", ".php", ".rb",
+      ".go", ".rs", ".html", ".css", ".scss", ".yaml", ".yml"
+    ]
+  },
+  "logging": {
+    "level": "info",
+    "colors": true,
+    "timestamp": true
+  },
+  "tts": {
+    "enabled": true,
+    "voice": "default",
+    "speed": 1.0,
+    "format": "mp3"
+  },
+  "chat": {
+    "maxHistorySize": 1000,
+    "saveHistory": true,
+    "contextSize": 4096
+  }
+}

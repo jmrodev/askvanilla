@@ -1,6 +1,6 @@
 import { TTS_CHARACTER_LIMIT } from '../../utils/constants.js'
 import { generateTTS } from '../generateTTS.js'
-import { saveAudioFile } from '../../../utils/saveAudioFile.js'
+import { saveAudioFile } from '../../utils/saveAudioFile.js'
 import path from 'path'
 
 export async function handleTTS({
